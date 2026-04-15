@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Head, router, usePage } from '@inertiajs/react';
 import LeaderLayout from '@/Layouts/LeaderLayout';
 import Modal from '@/Components/Modal';
@@ -15,6 +15,12 @@ export default function ProcedureIndex({ procedures, messengers, filters, stats 
     const [editingProcedure, setEditingProcedure] = useState(null);
     const [viewMode, setViewMode] = useState(false);
     const [errors, setErrors] = useState({});
+
+    // Import state
+    const [showImportModal, setShowImportModal] = useState(false);
+    const [importFile, setImportFile] = useState(null);
+    const [importing, setImporting] = useState(false);
+    const importFileRef = useRef(null);
 
     // Multi-selection state
     const [selectedIds, setSelectedIds] = useState([]);
@@ -191,7 +197,6 @@ export default function ProcedureIndex({ procedures, messengers, filters, stats 
             messenger_id: pendingActions.messenger_id || null
         }, {
             onSuccess: () => {
-                setSelectedIds([]);
                 setPendingActions({ status: '', messenger_id: '' });
             }
         });
@@ -202,6 +207,21 @@ export default function ProcedureIndex({ procedures, messengers, filters, stats 
         const url = new URL(route('procedures.export'));
         selectedIds.forEach(id => url.searchParams.append('ids[]', id));
         window.location.href = url.toString();
+    };
+
+    const handleImport = (e) => {
+        e.preventDefault();
+        if (!importFile) return;
+        setImporting(true);
+        router.post(route('procedures.import'), { file: importFile }, {
+            forceFormData: true,
+            onSuccess: () => {
+                setShowImportModal(false);
+                setImportFile(null);
+                if (importFileRef.current) importFileRef.current.value = '';
+            },
+            onFinish: () => setImporting(false),
+        });
     };
 
     return (
@@ -231,6 +251,9 @@ export default function ProcedureIndex({ procedures, messengers, filters, stats 
                                     <div className="text-xs font-black text-emerald-600 leading-none">{stats.completado}</div>
                                 </div>
                             </div>
+                            <button onClick={() => setShowImportModal(true)} className="px-5 py-2.5 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-bold text-[11px] uppercase tracking-widest hover:bg-slate-50 dark:hover:bg-slate-700 transition-all active:scale-95 border border-slate-200 dark:border-slate-700 shadow-sm">
+                                📥 Importar
+                            </button>
                             <button onClick={() => openModal()} className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-bold text-[11px] uppercase tracking-widest hover:bg-indigo-700 transition-all active:scale-95 shadow-lg shadow-indigo-100 dark:shadow-none">
                                 ➕ Nuevo Registro
                             </button>
@@ -636,6 +659,77 @@ export default function ProcedureIndex({ procedures, messengers, filters, stats 
                         )}
                     </div>
                 </form>
+            </Modal>
+
+            {/* Import Modal */}
+            <Modal show={showImportModal} onClose={() => { setShowImportModal(false); setImportFile(null); }} maxWidth="md">
+                <div className="bg-white dark:bg-slate-800 rounded-2xl">
+                    <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/50 rounded-t-2xl">
+                        <h2 className="text-base font-black text-slate-800 dark:text-white uppercase tracking-wider">
+                            Importar Trámites
+                        </h2>
+                        <button onClick={() => { setShowImportModal(false); setImportFile(null); }} className="text-slate-400 hover:text-slate-600">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                    </div>
+
+                    <form onSubmit={handleImport} className="p-6 space-y-5">
+                        {/* Template download */}
+                        <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl p-4 flex items-start gap-3">
+                            <svg className="w-5 h-5 text-indigo-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            <div className="text-xs text-indigo-700 dark:text-indigo-300">
+                                <p className="font-bold mb-1">Usa la plantilla oficial para evitar errores.</p>
+                                <p className="mb-2 text-indigo-600/80 dark:text-indigo-400/80">Columnas: producto, cantidad, identificacion, contacto, telefono, email, direccion, horainicio, horafinal, prioridad, info, notas_gestion</p>
+                                <p className="text-[10px] text-indigo-500/70">La guía se asigna automáticamente por el sistema.</p>
+                                <a
+                                    href={route('procedures.import-template')}
+                                    className="inline-flex items-center gap-1.5 font-black text-indigo-600 hover:text-indigo-800 underline underline-offset-2"
+                                >
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                                    Descargar plantilla
+                                </a>
+                            </div>
+                        </div>
+
+                        {/* File input */}
+                        <div>
+                            <InputLabel value="Archivo Excel (.xlsx, .xls, .csv)" className="text-[10px] uppercase font-bold text-slate-400 mb-2" />
+                            <div
+                                className="border-2 border-dashed border-slate-200 dark:border-slate-600 rounded-xl p-6 text-center cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/30 dark:hover:border-indigo-500 transition-colors"
+                                onClick={() => importFileRef.current?.click()}
+                            >
+                                {importFile ? (
+                                    <div className="flex items-center justify-center gap-2 text-sm text-emerald-600 font-bold">
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                        {importFile.name}
+                                    </div>
+                                ) : (
+                                    <div className="text-slate-400">
+                                        <svg className="w-8 h-8 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
+                                        <p className="text-xs font-bold">Haz clic para seleccionar archivo</p>
+                                        <p className="text-[10px] mt-1">.xlsx · .xls · .csv</p>
+                                    </div>
+                                )}
+                                <input
+                                    ref={importFileRef}
+                                    type="file"
+                                    accept=".xlsx,.xls,.csv"
+                                    className="hidden"
+                                    onChange={e => setImportFile(e.target.files[0] || null)}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-2 pt-2">
+                            <SecondaryButton type="button" onClick={() => { setShowImportModal(false); setImportFile(null); }}>
+                                Cancelar
+                            </SecondaryButton>
+                            <PrimaryButton type="submit" disabled={!importFile || importing} className="text-[11px]">
+                                {importing ? 'Importando...' : '📥 Importar Trámites'}
+                            </PrimaryButton>
+                        </div>
+                    </form>
+                </div>
             </Modal>
         </LeaderLayout >
     );

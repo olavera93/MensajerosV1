@@ -9,6 +9,8 @@ use App\Models\Messenger;
 use Maatwebsite\Excel\Facades\Excel;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithHeadings;
+use Maatwebsite\Excel\Concerns\ToArray;
+use Maatwebsite\Excel\Concerns\WithStartRow;
 
 class ProcedureController extends Controller
 {
@@ -174,6 +176,110 @@ class ProcedureController extends Controller
             },
             'tramites_beetrack_' . now()->format('Ymd_His') . '.xlsx'
         );
+    }
+
+    public function importTemplate()
+    {
+        $headers = ['producto', 'cantidad', 'identificacion', 'contacto', 'telefono', 'email', 'direccion', 'horainicio', 'horafinal', 'prioridad', 'info', 'notas_gestion'];
+
+        $examples = collect([
+            ['Documentos notariales', '1', '1020304050', 'Ana García', '3001234567', 'ana@correo.com', 'Calle 45 # 12-30, Bogotá', '2026-04-15 08:00', '2026-04-15 12:00', 'Normal', 'Entregar en portería', 'Cliente preferencial'],
+            ['Paquete electrónico',   '2', '9876543210', 'Luis Torres', '3109876543', 'luis@empresa.com', 'Carrera 7 # 80-15, Bogotá', '2026-04-15 14:00', '2026-04-15 18:00', 'Alta',   'Requiere firma del destinatario', ''],
+        ]);
+
+        return Excel::download(
+            new class ($headers, $examples) implements FromCollection, WithHeadings {
+                private $headers, $examples;
+                public function __construct($headers, $examples) { $this->headers = $headers; $this->examples = $examples; }
+                public function collection() { return $this->examples; }
+                public function headings(): array { return $this->headers; }
+            },
+            'plantilla_tramites.xlsx'
+        );
+    }
+
+    public function import(Request $request)
+    {
+        $request->validate([
+            'file' => 'required|file|mimes:xlsx,xls,csv',
+        ], [
+            'file.required' => 'Debes seleccionar un archivo.',
+            'file.mimes'    => 'El archivo debe ser .xlsx, .xls o .csv.',
+        ]);
+
+        $rows = Excel::toArray(new class implements ToArray {
+            public function array(array $array): array { return $array; }
+        }, $request->file('file'));
+
+        if (empty($rows) || empty($rows[0])) {
+            return redirect()->back()->with('error', 'El archivo está vacío.');
+        }
+
+        $sheet   = $rows[0];
+        $headers = array_map('strtolower', array_map('trim', $sheet[0]));
+        $dataRows = array_slice($sheet, 1);
+
+        $map = [
+            'producto'       => 'product',
+            'cantidad'       => 'quantity',
+            'identificacion' => 'client_id',
+            'contacto'       => 'contact_name',
+            'telefono'       => 'phone',
+            'email'          => 'email',
+            'direccion'      => 'address',
+            'horainicio'     => 'start_date',
+            'horafinal'      => 'end_date',
+            'prioridad'      => 'priority',
+            'info'           => 'info',
+            'notas_gestion'  => 'management_notes',
+        ];
+
+        $created = 0;
+
+        foreach ($dataRows as $row) {
+            // Ignorar filas completamente vacías
+            if (empty(array_filter($row, fn($v) => $v !== null && $v !== ''))) {
+                continue;
+            }
+
+            $data = [];
+            foreach ($headers as $i => $header) {
+                if (isset($map[$header]) && isset($row[$i])) {
+                    $data[$map[$header]] = trim((string) $row[$i]);
+                }
+            }
+
+            // Auto-generar guía (siempre, no viene del archivo)
+            $last  = Procedure::where('guide', 'like', 'TRAMITE%')
+                ->orderByRaw('CAST(SUBSTRING(guide, 8) AS UNSIGNED) DESC')
+                ->first();
+            $next  = $last ? (intval(substr($last->guide, 7)) + 1) : 1;
+            $guide = 'TRAMITE' . $next;
+
+            // Normalizar fechas (acepta Y/m/d H:i, Y-m-d H:i, Y-m-d, etc.)
+            foreach (['start_date', 'end_date'] as $dateField) {
+                if (!empty($data[$dateField])) {
+                    try {
+                        $data[$dateField] = \Carbon\Carbon::parse(str_replace('/', '-', $data[$dateField]))->format('Y-m-d H:i:s');
+                    } catch (\Exception $e) {
+                        $data[$dateField] = null;
+                    }
+                } else {
+                    $data[$dateField] = null;
+                }
+            }
+
+            Procedure::create([
+                ...$data,
+                'guide'   => $guide,
+                'status'  => 'pendiente',
+                'user_id' => auth()->id(),
+            ]);
+
+            $created++;
+        }
+
+        return redirect()->back()->with('success', "{$created} trámite(s) importado(s) correctamente.");
     }
 
     public function bulkUpdate(Request $request)
