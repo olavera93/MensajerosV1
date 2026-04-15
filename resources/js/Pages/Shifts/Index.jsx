@@ -24,6 +24,68 @@ export default function ShiftsIndex({ auth, messengers, weekStart, weekEnd }) {
     const [showExportModal, setShowExportModal] = useState(false);
     const [exportDates, setExportDates] = useState({ start: '', end: '' });
     const [messengerSearch, setMessengerSearch] = useState('');
+    const [shiftLocationFilter, setShiftLocationFilter] = useState('');  // '' | 'principal' | 'teusaquillo'
+    const [shiftStatusFilter, setShiftStatusFilter] = useState('');      // '' | 'present' | 'absent' | 'none'
+    const [sortOrder, setSortOrder] = useState('');                      // '' | 'asc' | 'desc'
+    const [dayFilter, setDayFilter] = useState('');                      // '' | 'YYYY-MM-DD'
+
+    const activeFilterCount = [messengerSearch, shiftLocationFilter, shiftStatusFilter, sortOrder, dayFilter].filter(Boolean).length;
+
+    const clearFilters = () => {
+        setMessengerSearch('');
+        setShiftLocationFilter('');
+        setShiftStatusFilter('');
+        setSortOrder('');
+        setDayFilter('');
+    };
+
+    // Per-day shift filter helper (shared by both views)
+    const matchesShiftFilters = (m, dateStr) => {
+        const shift = m.shifts.find(s => s.date === dateStr);
+        if (shiftLocationFilter && (!shift || shift.status === 'absent' || shift.location !== shiftLocationFilter)) return false;
+        if (shiftStatusFilter === 'none' && shift) return false;
+        if (shiftStatusFilter === 'present' && (!shift || shift.status !== 'present')) return false;
+        if (shiftStatusFilter === 'absent' && (!shift || shift.status !== 'absent')) return false;
+        return true;
+    };
+
+    // Helper: get the representative start_time for sorting (day-specific or earliest of the week)
+    const getSortTime = (m) => {
+        const relevantShifts = dayFilter
+            ? m.shifts.filter(s => s.date === dayFilter && s.status === 'present' && s.start_time)
+            : m.shifts.filter(s => s.status === 'present' && s.start_time);
+        if (!relevantShifts.length) return sortOrder === 'asc' ? '99:99' : '00:00';
+        const times = relevantShifts.map(s => s.start_time.substring(0, 5));
+        return sortOrder === 'asc' ? times.sort()[0] : times.sort().reverse()[0];
+    };
+
+    // Filter for desktop weekly view
+    // When a day is selected → apply shift filters to that day only
+    // When no day selected  → show messenger if ANY day of the week satisfies the shift filters
+    const filteredMessengers = messengers.filter(m => {
+        if (messengerSearch && !m.name.toLowerCase().includes(messengerSearch.toLowerCase())) return false;
+        if (dayFilter) return matchesShiftFilters(m, dayFilter);
+        if (shiftLocationFilter && !m.shifts.some(s => s.status !== 'absent' && s.location === shiftLocationFilter)) return false;
+        if (shiftStatusFilter === 'none' && m.shifts.length > 0) return false;
+        if (shiftStatusFilter === 'present' && !m.shifts.some(s => s.status === 'present')) return false;
+        if (shiftStatusFilter === 'absent' && !m.shifts.some(s => s.status === 'absent')) return false;
+        return true;
+    });
+
+    const sortedFilteredMessengers = sortOrder
+        ? [...filteredMessengers].sort((a, b) => {
+            const ta = getSortTime(a);
+            const tb = getSortTime(b);
+            return sortOrder === 'asc' ? ta.localeCompare(tb) : tb.localeCompare(ta);
+        })
+        : filteredMessengers;
+
+    // Filter for mobile daily view
+    const filteredMessengersForDay = (dateStr) => messengers.filter(m => {
+        if (messengerSearch && !m.name.toLowerCase().includes(messengerSearch.toLowerCase())) return false;
+        return matchesShiftFilters(m, dateStr);
+    });
+
     // Mobile: which day column is active (0 = Mon … 6 = Sun)
     const [selectedDayIdx, setSelectedDayIdx] = useState(() => {
         const todayDow = new Date().getDay(); // 0=Sun
@@ -130,21 +192,89 @@ export default function ShiftsIndex({ auth, messengers, weekStart, weekEnd }) {
                             </SuccessButton>
                         </div>
 
-                        {/* Messenger search — centro */}
-                        <div className="relative flex items-center gap-2 bg-white dark:bg-slate-800 p-1 pl-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                            <svg className="w-3 h-3 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                            </svg>
-                            <TextInput
-                                type="text"
-                                value={messengerSearch}
-                                onChange={(e) => setMessengerSearch(e.target.value)}
-                                placeholder="Buscar mensajero..."
-                                className="border-none bg-transparent dark:text-white text-xs focus:ring-0 py-1 shadow-none w-40"
-                            />
-                            {messengerSearch && (
-                                <button onClick={() => setMessengerSearch('')} className="pr-2 text-slate-400 hover:text-slate-600">
-                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
+                        {/* Filters panel */}
+                        <div className="flex flex-wrap items-center gap-2">
+                            {/* Name search */}
+                            <div className="relative flex items-center gap-2 bg-white dark:bg-slate-800 p-1 pl-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                                <svg className="w-3 h-3 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                                <TextInput
+                                    type="text"
+                                    value={messengerSearch}
+                                    onChange={(e) => setMessengerSearch(e.target.value)}
+                                    placeholder="Buscar mensajero..."
+                                    className="border-none bg-transparent dark:text-white text-xs focus:ring-0 py-1 shadow-none w-36"
+                                />
+                                {messengerSearch && (
+                                    <button onClick={() => setMessengerSearch('')} className="pr-2 text-slate-400 hover:text-slate-600">
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Day filter */}
+                            <select
+                                value={dayFilter}
+                                onChange={e => {
+                                    setDayFilter(e.target.value);
+                                    if (e.target.value) {
+                                        const idx = days.findIndex(d => d.format('YYYY-MM-DD') === e.target.value);
+                                        if (idx !== -1) setSelectedDayIdx(idx);
+                                    }
+                                }}
+                                className={`text-[11px] font-bold py-2 pl-3 pr-7 rounded-xl border shadow-sm bg-white dark:bg-slate-800 dark:text-slate-200 focus:ring-indigo-500 focus:border-indigo-400 transition-colors ${dayFilter ? 'border-indigo-400 text-indigo-700 dark:text-indigo-300' : 'border-slate-200 dark:border-slate-700 text-slate-500'}`}
+                            >
+                                <option value="">Todos los días</option>
+                                {days.map(d => (
+                                    <option key={d.format('YYYY-MM-DD')} value={d.format('YYYY-MM-DD')}>
+                                        {d.format('dddd D MMM')}
+                                    </option>
+                                ))}
+                            </select>
+
+                            {/* Sede del turno */}
+                            <select
+                                value={shiftLocationFilter}
+                                onChange={e => setShiftLocationFilter(e.target.value)}
+                                className={`text-[11px] font-bold py-2 pl-3 pr-7 rounded-xl border shadow-sm bg-white dark:bg-slate-800 dark:text-slate-200 focus:ring-indigo-500 focus:border-indigo-400 transition-colors ${shiftLocationFilter ? 'border-indigo-400 text-indigo-700 dark:text-indigo-300' : 'border-slate-200 dark:border-slate-700 text-slate-500'}`}
+                            >
+                                <option value="">Sede del turno</option>
+                                <option value="principal">Principal (116)</option>
+                                <option value="teusaquillo">Teusaquillo</option>
+                            </select>
+
+                            {/* Estado */}
+                            <select
+                                value={shiftStatusFilter}
+                                onChange={e => setShiftStatusFilter(e.target.value)}
+                                className={`text-[11px] font-bold py-2 pl-3 pr-7 rounded-xl border shadow-sm bg-white dark:bg-slate-800 dark:text-slate-200 focus:ring-indigo-500 focus:border-indigo-400 transition-colors ${shiftStatusFilter ? 'border-indigo-400 text-indigo-700 dark:text-indigo-300' : 'border-slate-200 dark:border-slate-700 text-slate-500'}`}
+                            >
+                                <option value="">Estado</option>
+                                <option value="present">Presente</option>
+                                <option value="absent">Ausente</option>
+                                <option value="none">Sin turno</option>
+                            </select>
+
+                            {/* Ordenar por hora */}
+                            <select
+                                value={sortOrder}
+                                onChange={e => setSortOrder(e.target.value)}
+                                className={`text-[11px] font-bold py-2 pl-3 pr-7 rounded-xl border shadow-sm bg-white dark:bg-slate-800 dark:text-slate-200 focus:ring-indigo-500 focus:border-indigo-400 transition-colors ${sortOrder ? 'border-indigo-400 text-indigo-700 dark:text-indigo-300' : 'border-slate-200 dark:border-slate-700 text-slate-500'}`}
+                            >
+                                <option value="">Ordenar por hora</option>
+                                <option value="asc">⬆ Temprano → Tarde</option>
+                                <option value="desc">⬇ Tarde → Temprano</option>
+                            </select>
+
+                            {/* Clear all */}
+                            {activeFilterCount > 0 && (
+                                <button
+                                    onClick={clearFilters}
+                                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-700 text-indigo-600 dark:text-indigo-300 text-[11px] font-black uppercase tracking-widest hover:bg-indigo-100 transition-colors"
+                                >
+                                    <span className="bg-indigo-600 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-black">{activeFilterCount}</span>
+                                    Limpiar
                                 </button>
                             )}
                         </div>
@@ -195,7 +325,7 @@ export default function ShiftsIndex({ auth, messengers, weekStart, weekEnd }) {
                             {(() => {
                                 const selectedDay = days[selectedDayIdx];
                                 const dateStr = selectedDay.format('YYYY-MM-DD');
-                                const filteredMs = messengers.filter(m => !messengerSearch || m.name.toLowerCase().includes(messengerSearch.toLowerCase()));
+                                const filteredMs = filteredMessengersForDay(dateStr);
 
                                 return filteredMs.length === 0 ? (
                                     <div className="text-center p-12 text-slate-400">
@@ -254,11 +384,17 @@ export default function ShiftsIndex({ auth, messengers, weekStart, weekEnd }) {
 
                     {/* ── Desktop: Full Weekly Table (sm+) ── */}
                     <div className="hidden sm:block bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg overflow-x-auto">
+                        {activeFilterCount > 0 && (
+                            <div className="px-5 py-2.5 bg-indigo-50 dark:bg-indigo-900/20 border-b border-indigo-100 dark:border-indigo-800 flex items-center gap-2 text-xs text-indigo-700 dark:text-indigo-300 font-bold">
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" /></svg>
+                                Mostrando {sortedFilteredMessengers.length} de {messengers.length} mensajeros
+                            </div>
+                        )}
                         <table className="min-w-full text-sm text-left text-gray-500 dark:text-gray-400">
                             <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
                                 <tr>
                                     <th className="px-6 py-3 sticky left-0 bg-gray-50 dark:bg-gray-700 z-10 w-48">Mensajero</th>
-                                    {days.map(d => (
+                                    {days.filter(d => !dayFilter || d.format('YYYY-MM-DD') === dayFilter).map(d => (
                                         <th key={d.toString()} className="px-6 py-3 text-center min-w-[120px]">
                                             <div className="font-bold">{d.format('dddd')}</div>
                                             <div className="text-gray-400">{d.format('DD MMM')}</div>
@@ -267,15 +403,13 @@ export default function ShiftsIndex({ auth, messengers, weekStart, weekEnd }) {
                                 </tr>
                             </thead>
                             <tbody>
-                                {messengers
-                                    .filter(m => !messengerSearch || m.name.toLowerCase().includes(messengerSearch.toLowerCase()))
-                                    .map(messenger => (
+                                {sortedFilteredMessengers.map(messenger => (
                                         <tr key={messenger.id} className="bg-white border-b dark:bg-gray-800 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
                                             <td className="px-6 py-4 font-medium text-gray-900 dark:text-white sticky left-0 bg-white dark:bg-gray-800 z-10">
                                                 {messenger.name}
                                                 <div className="text-xs text-slate-500">{messenger.vehicle}</div>
                                             </td>
-                                            {days.map(d => {
+                                            {days.filter(d => !dayFilter || d.format('YYYY-MM-DD') === dayFilter).map(d => {
                                                 const dateStr = d.format('YYYY-MM-DD');
                                                 const shift = messenger.shifts.find(s => s.date === dateStr);
 
