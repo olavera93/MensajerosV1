@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Head, useForm, router } from '@inertiajs/react';
 import LeaderLayout from '@/Layouts/LeaderLayout';
 import TextInput from '@/Components/TextInput';
@@ -113,126 +113,63 @@ export default function Dashboard({ messengers, dispatch_locations, beetrack_dat
             });
     }, [messengers]);
 
-    useEffect(() => {
+    const prevStatusRef = useRef({});
 
-        // 1. Listen for real-time events
-        // ... inside useEffect for real-time updates
-        if (window.Echo) {
-            window.Echo.channel('messengers')
-                .listen('.status.updated', (e) => {
+    const normalize = (str) => String(str || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 
-                    // Show Notification if trigger exists
-                    if (e.data && e.data.trigger) {
-                        const { name, status } = e.data.trigger;
-                        const icon = status.toLowerCase().includes('almuerzo') ? '🍔' :
-                            status.toLowerCase().includes('finalizado') ? '🏁' : '🛵';
+    const mergeBeetrack = (localList, btData) => {
+        const allBt = [...(btData.activos || []), ...(btData.libres || [])];
+        return localList.map(m => {
+            const btMatch = allBt.find(item => normalize(item.unidad) === normalize(m.vehicle));
+            const active = btData.activos?.find(item => normalize(item.unidad) === normalize(m.vehicle));
+            const beetrackInfo = active ? active : (btMatch ? m.beetrack_info : null);
+            const status = active ? 'En Ruta' : m.finished_info ? 'Finalizado' : m.status;
+            const currentClass = active ? 'status-en-ruta' : m.finished_info ? 'pendiente' : m.class_name;
+            return {
+                ...m,
+                name: btMatch ? (btMatch.nombre || m.name) : m.name,
+                status,
+                class_name: currentClass,
+                beetrack_info: beetrackInfo,
+                priority: getPriority(status),
+                lat: beetrackInfo?.lat || m.lat,
+                lng: beetrackInfo?.lng || m.lng,
+            };
+        });
+    };
 
-                        const newNote = {
-                            id: Date.now(),
-                            title: name,
-                            description: status,
-                            icon,
-                            time: new Date().toLocaleTimeString()
-                        };
-
-                        setNotificationsHistory(prev => [newNote, ...prev].slice(0, 50));
-
-                        toast(`${icon} ${name}`, {
-                            description: status,
-                        });
-                    }
-
-                    if (e.data && e.data.messenger) {
-                        setLocalMessengers(prev => prev.map(m =>
-                            m.id === e.data.messenger.id ? { ...e.data.messenger, beetrack_info: m.beetrack_info } : m
-                        ));
-                        setLastUpdated(new Date().toLocaleTimeString());
-                    }
-
-                    if (e.data && e.data.messengers) {
-                        setLocalMessengers(e.data.messengers);
-                        setLastUpdated(new Date().toLocaleTimeString());
-                    }
-
-                    if (e.data && e.data.refresh) {
-                        // Trigger a background fetch for BOTH beetrack and local data
-                        setBeetrackLoading(true);
-                        fetch(route('messenger.status.beetrack'))
-                            .then(res => res.json())
-                            .then(data => {
-                                if (data.beetrack_data) {
-                                    setLocalMessengers(prev => {
-                                        const normalize = (str) => String(str || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-                                        const btData = data.beetrack_data;
-                                        const allBt = [...(btData.activos || []), ...(btData.libres || [])];
-
-                                        return prev.map(m => {
-                                            const btMatch = allBt.find(item => normalize(item.unidad) === normalize(m.vehicle));
-                                            const active = btData.activos?.find(item => normalize(item.unidad) === normalize(m.vehicle));
-
-                                            let status = m.status;
-                                            let currentClass = m.class_name;
-                                            let beetrackInfo = m.beetrack_info;
-
-                                            if (active) {
-                                                status = 'En Ruta';
-                                                currentClass = 'status-en-ruta';
-                                                beetrackInfo = active;
-                                            }
-
-                                            return {
-                                                ...m,
-                                                name: btMatch ? (btMatch.nombre || m.name) : m.name,
-                                                status: status,
-                                                class_name: currentClass,
-                                                beetrack_info: beetrackInfo,
-                                                priority: getPriority(status),
-                                                lat: beetrackInfo?.lat || m.lat,
-                                                lng: beetrackInfo?.lng || m.lng,
-                                            };
-                                        });
-                                    });
-                                }
-                                setBeetrackLoading(false);
-                            })
-                            .catch(() => setBeetrackLoading(false));
-                    }
-                });
-        }
-
-        // 2. Local Polling (No longer fetches Beetrack by default)
-        const interval = setInterval(() => {
-            fetch(route('messenger.status'))
-                .then(res => res.json())
-                .then(data => {
-                    // Update Local data (shifts, lunch) but KEEP exiting beetrack info
-                    setLocalMessengers(prevMessengers => {
-                        return data.messengers.map(newM => {
-                            const oldM = prevMessengers.find(p => p.id === newM.id);
-                            const status = (oldM?.beetrack_info && !newM.finished_info) ? 'En Ruta' : newM.status;
-                            return {
-                                ...newM,
-                                name: oldM ? oldM.name : newM.name,
-                                status: status,
-                                class_name: (oldM?.beetrack_info && !newM.finished_info) ? 'status-en-ruta' : newM.class_name,
-                                beetrack_info: oldM ? oldM.beetrack_info : null,
-                                priority: getPriority(status),
-                                lat: oldM?.beetrack_info?.lat || newM.lat,
-                                lng: oldM?.beetrack_info?.lng || newM.lng,
-                            };
-                        })
-                    });
-                    setLastUpdated(new Date().toLocaleTimeString());
-                })
-                .catch(err => console.error('Polling error:', err));
-        }, 60000);
-
-        return () => {
-            if (window.Echo) {
-                window.Echo.leaveChannel('messengers');
+    const detectAndNotify = (newList) => {
+        newList.forEach(m => {
+            const prev = prevStatusRef.current[m.id];
+            if (prev && prev !== m.status) {
+                const icon = m.status.toLowerCase().includes('almuerzo') ? '🍔'
+                    : m.status.toLowerCase().includes('finalizado') ? '🏁' : '🛵';
+                const newNote = { id: Date.now() + m.id, title: m.name, description: m.status, icon, time: new Date().toLocaleTimeString() };
+                setNotificationsHistory(prev => [newNote, ...prev].slice(0, 50));
+                toast(`${icon} ${m.name}`, { description: m.status });
             }
-            clearInterval(interval);
+            prevStatusRef.current[m.id] = m.status;
+        });
+    };
+
+    useEffect(() => {
+        const poll = () => {
+            Promise.all([
+                fetch(route('messenger.status')).then(r => r.json()),
+                fetch(route('messenger.status.beetrack')).then(r => r.json()),
+            ]).then(([localData, btResponse]) => {
+                const btData = btResponse.beetrack_data;
+                let merged = localData.messengers;
+                if (btData) merged = mergeBeetrack(merged, btData);
+                detectAndNotify(merged);
+                setLocalMessengers(merged);
+                setLastUpdated(new Date().toLocaleTimeString());
+                setBeetrackLoading(false);
+            }).catch(err => console.error('Polling error:', err));
         };
+
+        const interval = setInterval(poll, 30000);
+        return () => clearInterval(interval);
     }, []);
 
     // --- Dispatch Form Handler ---

@@ -38,9 +38,6 @@ class ShiftController extends Controller
 
     public function store(Request $request)
     {
-        file_put_contents(base_path('debug_shifts.txt'), "Store Request: " . json_encode($request->all()) . "\n", FILE_APPEND);
-        \Illuminate\Support\Facades\Log::info('Shift store request:', $request->all());
-
         $validated = $request->validate([
             'messenger_id' => 'required|exists:messengers,id',
             'date' => 'required|date',

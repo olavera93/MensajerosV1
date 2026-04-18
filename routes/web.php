@@ -92,7 +92,7 @@ Route::middleware(['auth'])->group(function () {
         // Utilidades Operativas (Relacionadas con mensajeros)
         Route::get('/messenger-status', [UnifiedController::class, 'getMessengerStatus'])->name('messenger.status');
         Route::get('/messenger-status-beetrack', [UnifiedController::class, 'getBeetrackAsync'])->name('messenger.status.beetrack');
-        Route::post('/update-location/{messenger}', [UnifiedController::class, 'updateLocation'])->name('messenger.update-location');
+
         Route::post('/dispatch', [DispatchController::class, 'store'])->name('dispatch.store');
     });
 

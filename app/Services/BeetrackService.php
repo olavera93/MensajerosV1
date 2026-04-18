@@ -12,9 +12,8 @@ class BeetrackService
 
     public function __construct()
     {
-        // Using credentials provided by user
-        $this->apiKey = "3a36861f3edc3c68d42ad5d3aa72de58e49d22043c102cf22962f77125667556";
-        $this->baseUrl = "https://farmaciahom.dispatchtrack.com/api/external/v1/routes";
+        $this->apiKey = config('services.beetrack.api_key');
+        $this->baseUrl = config('services.beetrack.url');
     }
 
     public function getDispatchStatus()
@@ -205,23 +204,15 @@ class BeetrackService
             // Forced logging to the main log file
             Log::channel('single')->info('BEETRACK ATTEMPT - GUID: ' . $data['guide'], ['payload' => $payload]);
 
-            // Emergency Logging to a file we can definitely read
-            $debugData = [
-                'timestamp' => now()->toIso8601String(),
-                'url' => $createUrl,
-                'payload' => $payload
-            ];
-            file_put_contents('/tmp/beetrack_sync_debug.json', json_encode($debugData, JSON_PRETTY_PRINT));
-            chmod('/tmp/beetrack_sync_debug.json', 0666);
-
             $response = Http::timeout(45)->withHeaders([
                 'X-AUTH-TOKEN' => $this->apiKey,
                 'Content-Type' => 'application/json',
             ])->post($createUrl, $payload);
 
-            $debugData['response_status'] = $response->status();
-            $debugData['response_body'] = $response->json() ?: $response->body();
-            file_put_contents('/tmp/beetrack_sync_debug.json', json_encode($debugData, JSON_PRETTY_PRINT));
+            Log::info('BeetrackService: createDispatch response', [
+                'status' => $response->status(),
+                'body' => $response->json() ?: $response->body(),
+            ]);
 
             if ($response->successful()) {
                 $result = $response->json();

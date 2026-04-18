@@ -12,8 +12,8 @@ class TestBeetrackCommand extends Command
 
     public function handle()
     {
-        $apiKey = "3a36861f3edc3c68d42ad5d3aa72de58e49d22043c102cf22962f77125667556";
-        $baseUrl = "https://farmaciahom.dispatchtrack.com/api/external/v1/routes";
+        $apiKey = config('services.beetrack.api_key');
+        $baseUrl = config('services.beetrack.url');
         $today = now()->format('d-m-Y');
 
         $this->info("🔍 Testing Beetrack API Connection...");
