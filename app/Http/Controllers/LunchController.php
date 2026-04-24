@@ -23,8 +23,8 @@ class LunchController extends Controller
     {
         $request->validate(['plate' => 'required|string']);
 
-        // Search loosely (case insensitive and partial perhaps, but specific for now)
-        $messenger = Messenger::where('vehicle', $request->plate)->first();
+        $plate = strtoupper(trim($request->plate));
+        $messenger = Messenger::whereRaw('UPPER(TRIM(vehicle)) = ?', [$plate])->first();
 
         if (!$messenger) {
             return response()->json(['error' => 'Placa no encontrada'], 404);
@@ -66,7 +66,8 @@ class LunchController extends Controller
 
         // Fetch shifts for the entire current week and the next week
         $startOfWeek = now()->startOfWeek();
-        $endOfTwoWeeks = now()->addWeek()->endOfWeek();
+        $endOfCurrentWeek = now()->copy()->endOfWeek();
+        $endOfTwoWeeks = now()->copy()->addWeek()->endOfWeek();
 
         $dbShifts = $messenger->shifts()
             ->whereDate('date', '>=', $startOfWeek)
@@ -81,7 +82,7 @@ class LunchController extends Controller
             $dateStr = $currentDate->format('Y-m-d');
             $shift = $dbShifts->get($dateStr);
             $isToday = $dateStr === today()->format('Y-m-d');
-            $isNextWeek = $currentDate->isAfter(now()->endOfWeek());
+            $isNextWeek = $currentDate->isAfter($endOfCurrentWeek);
 
             $shifts->push([
                 'date' => $currentDate->locale('es')->isoFormat('dddd D [de] MMMM'),

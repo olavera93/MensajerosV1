@@ -23,8 +23,8 @@ class LunchController extends Controller
     {
         $request->validate(['plate' => 'required|string']);
 
-        // Search loosely (case insensitive and partial perhaps, but specific for now)
-        $messenger = Messenger::where('vehicle', $request->plate)->first();
+        $plate = strtoupper(trim($request->plate));
+        $messenger = Messenger::whereRaw('UPPER(TRIM(vehicle)) = ?', [$plate])->first();
 
         if (!$messenger) {
             return response()->json(['error' => 'Placa no encontrada'], 404);
@@ -66,7 +66,8 @@ class LunchController extends Controller
 
         // Fetch shifts for the entire current week and the next week
         $startOfWeek = now()->startOfWeek();
-        $endOfTwoWeeks = now()->addWeek()->endOfWeek();
+        $endOfCurrentWeek = now()->copy()->endOfWeek();
+        $endOfTwoWeeks = now()->copy()->addWeek()->endOfWeek();
 
         $dbShifts = $messenger->shifts()
             ->whereDate('date', '>=', $startOfWeek)
@@ -81,14 +82,14 @@ class LunchController extends Controller
             $dateStr = $currentDate->format('Y-m-d');
             $shift = $dbShifts->get($dateStr);
             $isToday = $dateStr === today()->format('Y-m-d');
-            $isNextWeek = $currentDate->isAfter(now()->endOfWeek());
+            $isNextWeek = $currentDate->isAfter($endOfCurrentWeek);
 
             $shifts->push([
                 'date' => $currentDate->locale('es')->isoFormat('dddd D [de] MMMM'),
-                'start_time' => $shift ? ($shift->start_time ? substr($shift->start_time, 0, 5) : null) : null,
-                'end_time' => $shift ? ($shift->end_time ? substr($shift->end_time, 0, 5) : null) : null,
+                'start_time' => $shift ? ($shift->status === 'absent' ? 'NO ASISTE' : ($shift->start_time ? substr($shift->start_time, 0, 5) : '-')) : 'SIN TURNO',
+                'end_time' => $shift ? ($shift->status === 'absent' ? '-' : ($shift->end_time ? substr($shift->end_time, 0, 5) : '-')) : '-',
                 'status' => $shift ? $shift->status : 'no_shift',
-                'location' => $shift ? ucfirst($shift->location) : 'Sin Programación',
+                'location' => $shift ? ucfirst($shift->location) : '-',
                 'is_today' => $isToday,
                 'is_next_week' => $isNextWeek,
             ]);

@@ -92,7 +92,7 @@ Route::middleware(['auth'])->group(function () {
         // Utilidades Operativas (Relacionadas con mensajeros)
         Route::get('/messenger-status', [UnifiedController::class, 'getMessengerStatus'])->name('messenger.status');
         Route::get('/messenger-status-beetrack', [UnifiedController::class, 'getBeetrackAsync'])->name('messenger.status.beetrack');
-        Route::post('/update-location/{messenger}', [UnifiedController::class, 'updateLocation'])->name('messenger.update-location');
+
         Route::post('/dispatch', [DispatchController::class, 'store'])->name('dispatch.store');
     });
 
@@ -125,6 +125,8 @@ Route::middleware(['auth'])->group(function () {
     // 11. Trámites
     Route::middleware(['module:procedures.index'])->group(function () {
         Route::get('/procedures/export', [ProcedureController::class, 'export'])->name('procedures.export');
+        Route::get('/procedures/import-template', [ProcedureController::class, 'importTemplate'])->name('procedures.import-template');
+        Route::post('/procedures/import', [ProcedureController::class, 'import'])->name('procedures.import');
         Route::post('/procedures/bulk-update', [ProcedureController::class, 'bulkUpdate'])->name('procedures.bulk-update');
         Route::resource('procedures', ProcedureController::class)->except(['create', 'edit', 'show']);
     });

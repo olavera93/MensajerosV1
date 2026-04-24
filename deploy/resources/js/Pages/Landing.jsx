@@ -39,16 +39,17 @@ export default function Landing() {
     const handleLunchSubmit = () => {
         post(route('lunch.store'), {
             onSuccess: (page) => {
-                if (page.props.flash.success) {
-                    setActiveLunch({
-                        end: page.props.flash.success.return_time
-                    });
-                }
+                setActiveLunch({
+                    end: page.props.flash?.success?.return_time || '—'
+                });
                 setViewState('active_lunch');
             },
             onError: (errors) => {
                 if (errors.lunch_duplicate) {
                     setViewState('lunch_duplicate_error');
+                } else if (errors.messenger_inactive) {
+                    alert(errors.messenger_inactive);
+                    setViewState('options');
                 }
             }
         });
@@ -60,6 +61,9 @@ export default function Landing() {
             onError: (errors) => {
                 if (errors.shift_duplicate) {
                     setViewState('shift_duplicate_error');
+                } else if (errors.messenger_inactive) {
+                    alert(errors.messenger_inactive);
+                    setViewState('options');
                 }
             }
         });
@@ -78,7 +82,8 @@ export default function Landing() {
             setPreopAnswers(initialAnswers);
             setPreopObservations('');
         } catch (err) {
-            console.error('Error loading questions', err);
+            alert('No se pudieron cargar las preguntas. Intenta de nuevo.');
+            setViewState('options');
         } finally {
             setLoadingQuestions(false);
         }
@@ -86,6 +91,10 @@ export default function Landing() {
 
     const handlePreopSubmit = async (e) => {
         e.preventDefault();
+        if (preopQuestions.length === 0) {
+            alert('No hay preguntas cargadas. Regresa al menú e intenta de nuevo.');
+            return;
+        }
         const unanswered = preopQuestions.filter(q => preopAnswers[q.key] === '');
         if (unanswered.length > 0) {
             alert('Por favor responde todas las preguntas del checklist.');
@@ -164,8 +173,7 @@ export default function Landing() {
 
             setViewState('options');
         } catch (err) {
-            setError('Placa no encontrada o error en el sistema.');
-            console.error(err);
+            setError(err.response?.data?.error || 'Error en el sistema. Intenta de nuevo.');
         } finally {
             setLoading(false);
         }
@@ -298,7 +306,7 @@ export default function Landing() {
                                 type="text"
                                 placeholder="Ej: AAA-123"
                                 value={plate}
-                                onChange={(e) => setPlate(e.target.value.toUpperCase())}
+                                onChange={(e) => setPlate(e.target.value.toUpperCase().trim())}
                                 className="w-full text-center text-3xl font-mono tracking-widest py-4 uppercase"
                                 required
                                 autoFocus
@@ -504,12 +512,23 @@ export default function Landing() {
                             <button onClick={() => setSelectedWeek('proxima')} className={`flex-1 py-2 px-4 rounded-lg font-bold text-xs ${selectedWeek === 'proxima' ? 'bg-white shadow' : 'text-gray-500'}`}>PRÓX. SEMANA</button>
                         </div>
                         <div className="space-y-3 max-h-[50vh] overflow-y-auto">
-                            {messenger?.shifts?.filter(s => selectedWeek === 'esta' ? !s.is_next_week : s.is_next_week).map((shift, i) => (
-                                <div key={i} className={`p-4 rounded-lg border-l-4 ${shift.is_today ? 'bg-indigo-50 border-indigo-500' : 'bg-white border-gray-300'}`}>
-                                    <p className="font-bold text-xs uppercase">{shift.date}</p>
-                                    <p className="text-xs">{shift.start_time} - {shift.end_time} | <span className="font-bold">{shift.location}</span></p>
-                                </div>
-                            )) || <p className="text-center text-gray-500">Sin turnos.</p>}
+                            {(() => {
+                                const filtered = (messenger?.shifts || []).filter(s => selectedWeek === 'esta' ? !s.is_next_week : s.is_next_week);
+                                if (filtered.length === 0) return <p className="text-center text-gray-500">Sin turnos.</p>;
+                                return filtered.map((shift, i) => (
+                                    <div key={i} className={`p-4 rounded-lg border-l-4 ${shift.is_today ? 'bg-indigo-50 border-indigo-500' : 'bg-white border-gray-300'}`}>
+                                        <p className="font-bold text-xs uppercase">{shift.date}</p>
+                                        <p className="text-xs">
+                                            {shift.start_time === 'NO ASISTE' || shift.start_time === 'SIN TURNO'
+                                                ? <span className="font-black text-red-500">{shift.start_time}</span>
+                                                : `${shift.start_time} - ${shift.end_time}`
+                                            }
+                                            {shift.location !== '-' && ` | `}
+                                            <span className="font-bold">{shift.location !== '-' ? shift.location : ''}</span>
+                                        </p>
+                                    </div>
+                                ));
+                            })()}
                         </div>
                         <SecondaryButton onClick={() => setViewState('options')} className="w-full justify-center">Volver</SecondaryButton>
                     </div>
