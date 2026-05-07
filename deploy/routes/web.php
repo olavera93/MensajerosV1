@@ -25,6 +25,7 @@ Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 // Landing para Mensajeros (Sin Auth o con Auth básico si se prefiere, pero actualmente parece libre)
 Route::get('/messenger', [LunchController::class, 'index'])->name('landing');
 Route::post('/messenger/check-plate', [LunchController::class, 'checkPlate'])->name('messenger.check-plate');
+Route::get('/messenger/{id}/shifts', [LunchController::class, 'getShifts'])->name('messenger.shifts');
 Route::post('/lunch', [LunchController::class, 'store'])->name('lunch.store');
 Route::post('/shift-completion', [ShiftCompletionController::class, 'store'])->name('shift-completion.store');
 

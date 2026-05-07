@@ -256,11 +256,27 @@ class ProcedureController extends Controller
             $next  = $last ? (intval(substr($last->guide, 7)) + 1) : 1;
             $guide = 'TRAMITE' . $next;
 
-            // Normalizar fechas (acepta Y/m/d H:i, Y-m-d H:i, Y-m-d, etc.)
             foreach (['start_date', 'end_date'] as $dateField) {
                 if (!empty($data[$dateField])) {
                     try {
-                        $data[$dateField] = \Carbon\Carbon::parse(str_replace('/', '-', $data[$dateField]))->format('Y-m-d H:i:s');
+                        $value = $data[$dateField];
+
+                        if (is_numeric($value)) {
+                            $dt = \PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject((float) $value);
+                            $data[$dateField] = \Carbon\Carbon::instance($dt)->format('Y-m-d H:i:s');
+                        } else {
+                            $parsed = null;
+                            foreach (['Y-m-d H:i:s', 'Y-m-d H:i', 'd/m/Y H:i', 'd/m/Y', 'Y-m-d'] as $fmt) {
+                                try {
+                                    $candidate = \Carbon\Carbon::createFromFormat($fmt, trim($value));
+                                    if ($candidate !== false) { $parsed = $candidate; break; }
+                                } catch (\Exception $e) {}
+                            }
+                            if (!$parsed) {
+                                try { $parsed = \Carbon\Carbon::parse($value); } catch (\Exception $e) {}
+                            }
+                            $data[$dateField] = $parsed ? $parsed->format('Y-m-d H:i:s') : null;
+                        }
                     } catch (\Exception $e) {
                         $data[$dateField] = null;
                     }

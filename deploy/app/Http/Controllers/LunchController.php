@@ -64,43 +64,49 @@ class LunchController extends Controller
             ];
         }
 
-        // Fetch shifts for the entire current week and the next week
-        $startOfWeek = now()->startOfWeek();
-        $endOfCurrentWeek = now()->copy()->endOfWeek();
-        $endOfTwoWeeks = now()->copy()->addWeek()->endOfWeek();
-
-        $dbShifts = $messenger->shifts()
-            ->whereDate('date', '>=', $startOfWeek)
-            ->whereDate('date', '<=', $endOfTwoWeeks)
-            ->get()
-            ->keyBy('date');
-
-        $shifts = collect();
-        $currentDate = $startOfWeek->copy();
-
-        while ($currentDate <= $endOfTwoWeeks) {
-            $dateStr = $currentDate->format('Y-m-d');
-            $shift = $dbShifts->get($dateStr);
-            $isToday = $dateStr === today()->format('Y-m-d');
-            $isNextWeek = $currentDate->isAfter($endOfCurrentWeek);
-
-            $shifts->push([
-                'date' => $currentDate->locale('es')->isoFormat('dddd D [de] MMMM'),
-                'start_time' => $shift ? ($shift->status === 'absent' ? 'NO ASISTE' : ($shift->start_time ? substr($shift->start_time, 0, 5) : '-')) : 'SIN TURNO',
-                'end_time' => $shift ? ($shift->status === 'absent' ? '-' : ($shift->end_time ? substr($shift->end_time, 0, 5) : '-')) : '-',
-                'status' => $shift ? $shift->status : 'no_shift',
-                'location' => $shift ? ucfirst($shift->location) : '-',
-                'is_today' => $isToday,
-                'is_next_week' => $isNextWeek,
-            ]);
-
-            $currentDate->addDay();
-        }
-
-        $response['shifts'] = $shifts;
         $response['external_forms'] = \App\Models\ExternalForm::where('is_active', true)->get(['title', 'url']);
 
         return response()->json($response);
+    }
+
+    public function getShifts(Request $request, $id)
+    {
+        $messenger = Messenger::findOrFail($id);
+
+        $week = $request->input('week', 'current');
+
+        $start = $week === 'next'
+            ? now()->addWeek()->startOfWeek()
+            : now()->startOfWeek();
+
+        $end = $start->copy()->endOfWeek();
+
+        $dbShifts = $messenger->shifts()
+            ->where('date', '>=', $start->format('Y-m-d'))
+            ->where('date', '<=', $end->format('Y-m-d'))
+            ->get()
+            ->keyBy(fn($s) => substr($s->date, 0, 10));
+
+        $shifts = collect();
+        $current = $start->copy();
+
+        while ($current <= $end) {
+            $dateStr = $current->format('Y-m-d');
+            $shift = $dbShifts->get($dateStr);
+
+            $shifts->push([
+                'date'       => $current->locale('es')->isoFormat('dddd D [de] MMMM'),
+                'start_time' => $shift ? ($shift->status === 'absent' ? 'NO ASISTE' : ($shift->start_time ? substr($shift->start_time, 0, 5) : '-')) : 'SIN TURNO',
+                'end_time'   => $shift ? ($shift->status === 'absent' ? '-' : ($shift->end_time ? substr($shift->end_time, 0, 5) : '-')) : '-',
+                'status'     => $shift ? $shift->status : 'no_shift',
+                'location'   => $shift ? ucfirst($shift->location) : '-',
+                'is_today'   => $dateStr === today()->format('Y-m-d'),
+            ]);
+
+            $current->addDay();
+        }
+
+        return response()->json(['shifts' => $shifts]);
     }
 
     public function report(Request $request)
