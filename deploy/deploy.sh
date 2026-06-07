@@ -1,26 +1,25 @@
 #!/bin/bash
 
 # Deployment script for Logística LFH
+# Assets ya compilados en public/build/ — no requiere Node.js en el servidor
 
-echo "🚀 Iniciando despliegue..."
+set -e
 
-# Optimizar composer
-echo "📦 Instalando dependencias de PHP..."
+echo "Iniciando despliegue..."
+
+echo "Instalando dependencias PHP..."
 composer install --no-dev --optimize-autoloader
 
-# Instalar dependencias de NPM y construir assets
-echo "🏗️ Construyendo assets del frontend..."
-npm install
-npm run build
-
-# Ejecutar migraciones
-echo "🗄️ Ejecutando migraciones..."
+echo "Ejecutando migraciones..."
 php artisan migrate --force
 
-# Limpiar y cachear configuración
-echo "🧹 Limpiando caché..."
+echo "Limpiando y cacheando configuracion..."
+php artisan optimize:clear
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
 
-echo "✅ Despliegue completado con éxito!"
+echo "Creando enlace de almacenamiento..."
+php artisan storage:link --force
+
+echo "Despliegue completado."

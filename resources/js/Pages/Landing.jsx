@@ -17,7 +17,9 @@ export default function Landing() {
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(false);
     const [activeLunch, setActiveLunch] = useState(null);
-    const [selectedWeek, setSelectedWeek] = useState('esta'); // esta, proxima
+    const [selectedWeek, setSelectedWeek] = useState(null);
+    const [weekShifts, setWeekShifts] = useState([]);
+    const [shiftsLoading, setShiftsLoading] = useState(false);
 
     // Preoperational State
     const [preopQuestions, setPreopQuestions] = useState([]);
@@ -39,16 +41,17 @@ export default function Landing() {
     const handleLunchSubmit = () => {
         post(route('lunch.store'), {
             onSuccess: (page) => {
-                if (page.props.flash.success) {
-                    setActiveLunch({
-                        end: page.props.flash.success.return_time
-                    });
-                }
+                setActiveLunch({
+                    end: page.props.flash?.success?.return_time || '—'
+                });
                 setViewState('active_lunch');
             },
             onError: (errors) => {
                 if (errors.lunch_duplicate) {
                     setViewState('lunch_duplicate_error');
+                } else if (errors.messenger_inactive) {
+                    alert(errors.messenger_inactive);
+                    setViewState('options');
                 }
             }
         });
@@ -60,6 +63,9 @@ export default function Landing() {
             onError: (errors) => {
                 if (errors.shift_duplicate) {
                     setViewState('shift_duplicate_error');
+                } else if (errors.messenger_inactive) {
+                    alert(errors.messenger_inactive);
+                    setViewState('options');
                 }
             }
         });
@@ -78,7 +84,8 @@ export default function Landing() {
             setPreopAnswers(initialAnswers);
             setPreopObservations('');
         } catch (err) {
-            console.error('Error loading questions', err);
+            alert('No se pudieron cargar las preguntas. Intenta de nuevo.');
+            setViewState('options');
         } finally {
             setLoadingQuestions(false);
         }
@@ -86,6 +93,10 @@ export default function Landing() {
 
     const handlePreopSubmit = async (e) => {
         e.preventDefault();
+        if (preopQuestions.length === 0) {
+            alert('No hay preguntas cargadas. Regresa al menú e intenta de nuevo.');
+            return;
+        }
         const unanswered = preopQuestions.filter(q => preopAnswers[q.key] === '');
         if (unanswered.length > 0) {
             alert('Por favor responde todas las preguntas del checklist.');
@@ -164,10 +175,24 @@ export default function Landing() {
 
             setViewState('options');
         } catch (err) {
-            setError('Placa no encontrada o error en el sistema.');
-            console.error(err);
+            setError(err.response?.data?.error || 'Error en el sistema. Intenta de nuevo.');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const loadShifts = async (week) => {
+        setSelectedWeek(week);
+        setShiftsLoading(true);
+        try {
+            const res = await axios.get(route('messenger.shifts', messenger.id), {
+                params: { week }
+            });
+            setWeekShifts(res.data.shifts || []);
+        } catch {
+            setWeekShifts([]);
+        } finally {
+            setShiftsLoading(false);
         }
     };
 
@@ -177,6 +202,8 @@ export default function Landing() {
         setPlate('');
         setError(null);
         setActiveLunch(null);
+        setSelectedWeek(null);
+        setWeekShifts([]);
         setCleaningItem('');
         setCleaningType('');
         setCleaningObservations('');
@@ -298,7 +325,7 @@ export default function Landing() {
                                 type="text"
                                 placeholder="Ej: AAA-123"
                                 value={plate}
-                                onChange={(e) => setPlate(e.target.value.toUpperCase())}
+                                onChange={(e) => setPlate(e.target.value.toUpperCase().trim())}
                                 className="w-full text-center text-3xl font-mono tracking-widest py-4 uppercase"
                                 required
                                 autoFocus
@@ -500,23 +527,42 @@ export default function Landing() {
                     <div className="space-y-6">
                         <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100 text-center">Mis Turnos</h3>
                         <div className="flex bg-gray-100 p-1 rounded-xl">
-                            <button onClick={() => setSelectedWeek('esta')} className={`flex-1 py-2 px-4 rounded-lg font-bold text-xs ${selectedWeek === 'esta' ? 'bg-white shadow' : 'text-gray-500'}`}>ESTA SEMANA</button>
-                            <button onClick={() => setSelectedWeek('proxima')} className={`flex-1 py-2 px-4 rounded-lg font-bold text-xs ${selectedWeek === 'proxima' ? 'bg-white shadow' : 'text-gray-500'}`}>PRÓX. SEMANA</button>
+                            <button
+                                onClick={() => loadShifts('current')}
+                                className={`flex-1 py-2 px-4 rounded-lg font-bold text-xs ${selectedWeek === 'current' ? 'bg-white shadow' : 'text-gray-500'}`}
+                            >
+                                ESTA SEMANA
+                            </button>
+                            <button
+                                onClick={() => loadShifts('next')}
+                                className={`flex-1 py-2 px-4 rounded-lg font-bold text-xs ${selectedWeek === 'next' ? 'bg-white shadow' : 'text-gray-500'}`}
+                            >
+                                PRÓX. SEMANA
+                            </button>
                         </div>
                         <div className="space-y-3 max-h-[50vh] overflow-y-auto">
-                            {messenger?.shifts?.filter(s => selectedWeek === 'esta' ? !s.is_next_week : s.is_next_week).map((shift, i) => (
-                                <div key={i} className={`p-4 rounded-lg border-l-4 ${shift.is_today ? 'bg-indigo-50 border-indigo-500' : 'bg-white border-gray-300'}`}>
-                                    <p className="font-bold text-xs uppercase">{shift.date}</p>
-                                    <p className="text-xs">
-                                        {shift.start_time === 'NO ASISTE' || shift.start_time === 'SIN TURNO'
-                                            ? <span className="font-black text-red-500">{shift.start_time}</span>
-                                            : `${shift.start_time} - ${shift.end_time}`
-                                        }
-                                        {shift.location !== '-' && ` | `}
-                                        <span className="font-bold">{shift.location !== '-' ? shift.location : ''}</span>
-                                    </p>
+                            {shiftsLoading ? (
+                                <div className="flex justify-center py-8">
+                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500"></div>
                                 </div>
-                            )) || <p className="text-center text-gray-500">Sin turnos.</p>}
+                            ) : selectedWeek === null ? (
+                                <p className="text-center text-gray-400 py-8 text-sm">Selecciona una semana para ver tus turnos.</p>
+                            ) : weekShifts.length === 0 ? (
+                                <p className="text-center text-gray-500 py-8">Sin turnos registrados.</p>
+                            ) : (
+                                weekShifts.map((shift, i) => (
+                                    <div key={i} className={`p-4 rounded-lg border-l-4 ${shift.is_today ? 'bg-indigo-50 border-indigo-500' : 'bg-white border-gray-300'}`}>
+                                        <p className="font-bold text-xs uppercase">{shift.date}</p>
+                                        <p className="text-xs">
+                                            {shift.start_time === 'NO ASISTE' || shift.start_time === 'SIN TURNO'
+                                                ? <span className="font-black text-red-500">{shift.start_time}</span>
+                                                : `${shift.start_time} - ${shift.end_time}`}
+                                            {shift.location !== '-' && ` | `}
+                                            <span className="font-bold" translate="no">{shift.location !== '-' ? shift.location : ''}</span>
+                                        </p>
+                                    </div>
+                                ))
+                            )}
                         </div>
                         <SecondaryButton onClick={() => setViewState('options')} className="w-full justify-center">Volver</SecondaryButton>
                     </div>

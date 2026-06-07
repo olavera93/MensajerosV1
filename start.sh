@@ -10,8 +10,8 @@ sleep 1
 
 # Fijar .env para localhost
 sed -i "s|^APP_URL=.*|APP_URL=http://localhost:8000|" .env
-sed -i "s|^REVERB_HOST=.*|REVERB_HOST=\"localhost\"|" .env
-sed -i "s|^VITE_REVERB_HOST=.*|VITE_REVERB_HOST=\"localhost\"|" .env
+sed -i "s|^APP_ENV=.*|APP_ENV=local|" .env
+sed -i "s|^APP_DEBUG=.*|APP_DEBUG=true|" .env
 
 echo ""
 echo "🚀 Iniciando Mensajeros LFH (localhost)..."
@@ -20,9 +20,8 @@ echo ""
 
 # Usar concurrently para ejecutar todos los servicios
 npx concurrently \
-    --names "BACK,FRONT,REVERB,QUEUE" \
-    --prefix-colors "blue,green,magenta,yellow" \
+    --names "BACK,FRONT,QUEUE" \
+    --prefix-colors "blue,green,yellow" \
     "php artisan serve --port=8000" \
     "npm run dev" \
-    "php artisan reverb:start" \
     "php artisan queue:work"

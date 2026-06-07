@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Head, router } from '@inertiajs/react';
+import { Head, router, useForm } from '@inertiajs/react';
 import LeaderLayout from '@/Layouts/LeaderLayout';
 import Modal from '@/Components/Modal';
 import PrimaryButton from '@/Components/PrimaryButton';
@@ -12,8 +12,7 @@ import InputError from '@/Components/InputError';
 export default function UserIndex({ users }) {
     const [showModal, setShowModal] = useState(false);
     const [editingUser, setEditingUser] = useState(null);
-    const [errors, setErrors] = useState({});
-    const [form, setForm] = useState({
+    const { data: form, setData: setForm, post, put, processing, errors, clearErrors, reset } = useForm({
         name: '',
         email: '',
         password: '',
@@ -36,49 +35,39 @@ export default function UserIndex({ users }) {
     ];
 
     const openModal = (user = null) => {
+        clearErrors();
         if (user) {
             setEditingUser(user);
-            setForm({
-                name: user.name,
-                email: user.email,
-                password: '',
-                role: user.role,
-                modules: user.modules || [],
-            });
+            setForm('name', user.name);
+            setForm('email', user.email);
+            setForm('password', '');
+            setForm('role', user.role);
+            setForm('modules', user.modules || []);
         } else {
             setEditingUser(null);
-            setForm({
-                name: '',
-                email: '',
-                password: '',
-                role: 'lider',
-                modules: [],
-            });
+            reset();
         }
-        setErrors({});
         setShowModal(true);
     };
 
     const handleModuleToggle = (moduleId) => {
         const currentModules = [...form.modules];
         if (currentModules.includes(moduleId)) {
-            setForm({ ...form, modules: currentModules.filter(id => id !== moduleId) });
+            setForm('modules', currentModules.filter(id => id !== moduleId));
         } else {
-            setForm({ ...form, modules: [...currentModules, moduleId] });
+            setForm('modules', [...currentModules, moduleId]);
         }
     };
 
     const submit = (e) => {
         e.preventDefault();
         if (editingUser) {
-            router.put(route('users.update', editingUser.id), form, {
+            put(route('users.update', editingUser.id), {
                 onSuccess: () => setShowModal(false),
-                onError: (err) => setErrors(err),
             });
         } else {
-            router.post(route('users.store'), form, {
+            post(route('users.store'), {
                 onSuccess: () => setShowModal(false),
-                onError: (err) => setErrors(err),
             });
         }
     };
@@ -196,7 +185,7 @@ export default function UserIndex({ users }) {
                                     id="name"
                                     className="mt-1 block w-full"
                                     value={form.name}
-                                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                                    onChange={(e) => setForm('name', e.target.value)}
                                     required
                                 />
                                 <InputError message={errors.name} className="mt-2" />
@@ -209,7 +198,7 @@ export default function UserIndex({ users }) {
                                     type="email"
                                     className="mt-1 block w-full"
                                     value={form.email}
-                                    onChange={(e) => setForm({ ...form, email: e.target.value })}
+                                    onChange={(e) => setForm('email', e.target.value)}
                                     required
                                 />
                                 <InputError message={errors.email} className="mt-2" />
@@ -224,7 +213,7 @@ export default function UserIndex({ users }) {
                                     type="password"
                                     className="mt-1 block w-full"
                                     value={form.password}
-                                    onChange={(e) => setForm({ ...form, password: e.target.value })}
+                                    onChange={(e) => setForm('password', e.target.value)}
                                     required={!editingUser}
                                 />
                                 <InputError message={errors.password} className="mt-2" />
@@ -236,7 +225,7 @@ export default function UserIndex({ users }) {
                                     id="role"
                                     className="mt-1 block w-full"
                                     value={form.role}
-                                    onChange={(e) => setForm({ ...form, role: e.target.value })}
+                                    onChange={(e) => setForm('role', e.target.value)}
                                     required
                                 >
                                     <option value="administrador">Administrador</option>
@@ -257,7 +246,7 @@ export default function UserIndex({ users }) {
                                         type="button"
                                         onClick={() => handleModuleToggle(mod.id)}
                                         className={`
-                                            flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all group
+                                            relative flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all group
                                             ${form.modules.includes(mod.id)
                                                 ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
                                                 : 'border-slate-100 dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 text-slate-400'}
@@ -284,7 +273,7 @@ export default function UserIndex({ users }) {
                             <SecondaryButton onClick={() => setShowModal(false)}>
                                 Cancelar
                             </SecondaryButton>
-                            <PrimaryButton disabled={router.processing}>
+                            <PrimaryButton disabled={processing}>
                                 {editingUser ? 'Actualizar' : 'Crear'}
                             </PrimaryButton>
                         </div>

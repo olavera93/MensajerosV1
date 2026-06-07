@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'beetrack' => [
+        'api_key' => env('BEETRACK_API_KEY'),
+        'url' => env('BEETRACK_URL', 'https://farmaciahom.dispatchtrack.com/api/external/v1/routes'),
+    ],
+
 ];

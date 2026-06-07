@@ -22,12 +22,17 @@ class CheckModule
             return redirect('/');
         }
 
-        // Si el usuario es desarrollador, tiene acceso a todo
-        if ($user->role === 'desarrollador') {
+        // Desarrollador y administrador tienen acceso a todo
+        if (in_array($user->role, ['desarrollador', 'administrador'])) {
             return $next($request);
         }
 
         $userModules = $user->modules ?: [];
+
+        // Si no tiene módulos asignados explícitamente, usar defaults por rol
+        if (empty($userModules)) {
+            $userModules = $this->defaultModulesForRole($user->role);
+        }
 
         // Verificar si el usuario tiene al menos uno de los módulos requeridos
         $hasAccess = false;
@@ -43,5 +48,19 @@ class CheckModule
         }
 
         return $next($request);
+    }
+
+    private function defaultModulesForRole(string $role): array
+    {
+        return match ($role) {
+            'lider' => [
+                'dashboard', 'shifts.index', 'messengers.index',
+                'reports.lunch', 'reports.exit', 'reports.preoperational',
+                'reports.cleaning', 'reports.global-stats',
+                'external-forms.index', 'users.index', 'procedures.index',
+            ],
+            'regente' => ['reports.preoperational'],
+            default => [],
+        };
     }
 }

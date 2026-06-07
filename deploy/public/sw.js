@@ -1,19 +1,21 @@
 // Service Worker — Logística LFH
-const CACHE_NAME = 'lfh-v1';
+// Bump CACHE_NAME en cada deploy para limpiar caché viejo
+const CACHE_NAME = 'lfh-v10';
 
-// Assets to cache on install (shell only — no API calls)
-const SHELL_ASSETS = [
-    '/',
-    '/manifest.json',
-    '/favicon.ico',
-];
-
-self.addEventListener('install', (event) => {
-    self.skipWaiting();
-    event.waitUntil(
-        caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_ASSETS))
+const networkFirst = (event) => {
+    event.respondWith(
+        fetch(event.request)
+            .then((response) => {
+                if (response.ok) {
+                    caches.open(CACHE_NAME).then((cache) => cache.put(event.request, response.clone()));
+                }
+                return response;
+            })
+            .catch(() => caches.match(event.request))
     );
-});
+};
+
+self.addEventListener('install', () => self.skipWaiting());
 
 self.addEventListener('activate', (event) => {
     event.waitUntil(
@@ -24,37 +26,16 @@ self.addEventListener('activate', (event) => {
     self.clients.claim();
 });
 
-// Network-first strategy: always try network, fall back to cache
 self.addEventListener('fetch', (event) => {
-    // Skip Inertia/API XHR requests — always network
-    const url = new URL(event.request.url);
-    const isApiCall = event.request.headers.get('X-Inertia') || url.pathname.startsWith('/api/');
+    const { request } = event;
+    const url = new URL(request.url);
 
-    if (event.request.method !== 'GET' || event.request.url.startsWith('chrome-extension') || isApiCall) {
-        return; // Browser handles it normally
-    }
+    // Solo GET del mismo origen
+    if (request.method !== 'GET' || url.origin !== location.origin) return;
 
-    event.respondWith(
-        fetch(event.request)
-            .then((response) => {
-                // Cache successful GET responses for static assets (same origin)
-                if (response.ok && url.origin === location.origin && (
-                    url.pathname.startsWith('/build/') ||
-                    url.pathname.endsWith('.js') ||
-                    url.pathname.endsWith('.css') ||
-                    url.pathname.endsWith('.png') ||
-                    url.pathname.endsWith('.ico')
-                )) {
-                    const clone = response.clone();
-                    caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-                }
-                return response;
-            })
-            .catch(() => {
-                return caches.match(event.request).then((cachedResponse) => {
-                    if (cachedResponse) return cachedResponse;
-                    throw new Error('Network and cache failed');
-                });
-            })
-    );
+    // Dejar pasar XHR de Inertia (datos dinámicos, no cachear)
+    if (request.headers.get('X-Inertia')) return;
+
+    // NetworkFirst para todo lo demás: HTML, assets, iconos
+    networkFirst(event);
 });
