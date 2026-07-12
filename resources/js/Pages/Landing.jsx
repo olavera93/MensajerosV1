@@ -1,4 +1,9 @@
 import React, { useState } from 'react';
+import dayjs from 'dayjs';
+import 'dayjs/locale/es';
+import isoWeek from 'dayjs/plugin/isoWeek';
+dayjs.extend(isoWeek);
+dayjs.locale('es');
 import { Head, useForm, usePage, router } from '@inertiajs/react';
 import axios from 'axios';
 import TextInput from '@/Components/TextInput';
@@ -17,7 +22,7 @@ export default function Landing() {
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(false);
     const [activeLunch, setActiveLunch] = useState(null);
-    const [selectedWeek, setSelectedWeek] = useState(null);
+    const [shiftsWeekDate, setShiftsWeekDate] = useState(null); // dayjs Monday of displayed week
     const [weekShifts, setWeekShifts] = useState([]);
     const [shiftsLoading, setShiftsLoading] = useState(false);
 
@@ -181,12 +186,13 @@ export default function Landing() {
         }
     };
 
-    const loadShifts = async (week) => {
-        setSelectedWeek(week);
+    const loadShifts = async (weekMonday) => {
+        setShiftsWeekDate(weekMonday);
         setShiftsLoading(true);
         try {
             const res = await axios.get(route('messenger.shifts', messenger.id), {
-                params: { week }
+                params: { date: weekMonday.format('YYYY-MM-DD') },
+                headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
             });
             setWeekShifts(res.data.shifts || []);
         } catch {
@@ -202,7 +208,7 @@ export default function Landing() {
         setPlate('');
         setError(null);
         setActiveLunch(null);
-        setSelectedWeek(null);
+        setShiftsWeekDate(null);
         setWeekShifts([]);
         setCleaningItem('');
         setCleaningType('');
@@ -340,7 +346,14 @@ export default function Landing() {
 
                 {viewState === 'options' && (
                     <div className="space-y-4">
-                        <PrimaryButton onClick={() => setViewState('shifts_view')} className="w-full py-5 flex items-center justify-between text-lg group">
+                        <PrimaryButton
+                            onClick={() => {
+                                const monday = dayjs().isoWeekday(1).startOf('day');
+                                setViewState('shifts_view');
+                                loadShifts(monday);
+                            }}
+                            className="w-full py-5 flex items-center justify-between text-lg group"
+                        >
                             <span className="flex items-center gap-3"><span className="text-2xl">📅</span><span>VER MIS HORARIOS</span></span>
                             <span className="text-indigo-200 group-hover:text-white">→</span>
                         </PrimaryButton>
@@ -524,46 +537,63 @@ export default function Landing() {
                 )}
 
                 {viewState === 'shifts_view' && (
-                    <div className="space-y-6">
+                    <div className="space-y-4">
                         <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100 text-center">Mis Turnos</h3>
-                        <div className="flex bg-gray-100 p-1 rounded-xl">
+
+                        {/* Navegación de semana */}
+                        <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-700 p-1.5 rounded-xl">
                             <button
-                                onClick={() => loadShifts('current')}
-                                className={`flex-1 py-2 px-4 rounded-lg font-bold text-xs ${selectedWeek === 'current' ? 'bg-white shadow' : 'text-gray-500'}`}
+                                onClick={() => shiftsWeekDate && loadShifts(shiftsWeekDate.subtract(1, 'week'))}
+                                className="w-10 h-9 flex items-center justify-center bg-white dark:bg-gray-800 rounded-lg font-black text-indigo-600 shadow-sm hover:bg-indigo-50 active:scale-95 transition-all"
                             >
-                                ESTA SEMANA
+                                ←
                             </button>
+
+                            <div className="flex-1 text-center">
+                                {shiftsWeekDate ? (
+                                    <span className="text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-tight">
+                                        {shiftsWeekDate.format('D MMM')} – {shiftsWeekDate.add(6, 'day').format('D MMM')}
+                                    </span>
+                                ) : (
+                                    <span className="text-xs text-gray-400">Cargando...</span>
+                                )}
+                            </div>
+
                             <button
-                                onClick={() => loadShifts('next')}
-                                className={`flex-1 py-2 px-4 rounded-lg font-bold text-xs ${selectedWeek === 'next' ? 'bg-white shadow' : 'text-gray-500'}`}
+                                onClick={() => shiftsWeekDate && loadShifts(shiftsWeekDate.add(1, 'week'))}
+                                className="w-10 h-9 flex items-center justify-center bg-white dark:bg-gray-800 rounded-lg font-black text-indigo-600 shadow-sm hover:bg-indigo-50 active:scale-95 transition-all"
                             >
-                                PRÓX. SEMANA
+                                →
                             </button>
                         </div>
+
+                        {/* Lista de turnos */}
                         <div className="space-y-3 max-h-[50vh] overflow-y-auto">
                             {shiftsLoading ? (
                                 <div className="flex justify-center py-8">
                                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500"></div>
                                 </div>
-                            ) : selectedWeek === null ? (
-                                <p className="text-center text-gray-400 py-8 text-sm">Selecciona una semana para ver tus turnos.</p>
                             ) : weekShifts.length === 0 ? (
-                                <p className="text-center text-gray-500 py-8">Sin turnos registrados.</p>
+                                <p className="text-center text-gray-500 py-8 text-sm">Sin turnos registrados esta semana.</p>
                             ) : (
                                 weekShifts.map((shift, i) => (
-                                    <div key={i} className={`p-4 rounded-lg border-l-4 ${shift.is_today ? 'bg-indigo-50 border-indigo-500' : 'bg-white border-gray-300'}`}>
-                                        <p className="font-bold text-xs uppercase">{shift.date}</p>
-                                        <p className="text-xs">
+                                    <div key={i} className={`p-4 rounded-xl border-l-4 ${shift.is_today ? 'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-500' : 'bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600'}`}>
+                                        <p className={`font-black text-xs uppercase mb-1 ${shift.is_today ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                                            {shift.date}{shift.is_today && ' · HOY'}
+                                        </p>
+                                        <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
                                             {shift.start_time === 'NO ASISTE' || shift.start_time === 'SIN TURNO'
                                                 ? <span className="font-black text-red-500">{shift.start_time}</span>
-                                                : `${shift.start_time} - ${shift.end_time}`}
-                                            {shift.location !== '-' && ` | `}
-                                            <span className="font-bold" translate="no">{shift.location !== '-' ? shift.location : ''}</span>
+                                                : <span>{shift.start_time} – {shift.end_time}</span>}
+                                            {shift.location !== '-' && (
+                                                <span className="ml-2 text-xs text-gray-400 font-normal" translate="no">· {shift.location}</span>
+                                            )}
                                         </p>
                                     </div>
                                 ))
                             )}
                         </div>
+
                         <SecondaryButton onClick={() => setViewState('options')} className="w-full justify-center">Volver</SecondaryButton>
                     </div>
                 )}
