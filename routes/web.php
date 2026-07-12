@@ -80,6 +80,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/reports/global-stats', [GlobalStatsController::class, 'index'])->name('reports.global-stats');
         Route::get('/reports/global-stats/data', [GlobalStatsController::class, 'data'])->name('reports.global-stats.data');
         Route::get('/reports/global-stats/export', [GlobalStatsController::class, 'export'])->name('reports.global-stats.export');
+        Route::get('/reports/global-stats/alerts', [GlobalStatsController::class, 'alerts'])->name('reports.global-stats.alerts');
     });
 
     // 6. Reporte de Salida
