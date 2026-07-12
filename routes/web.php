@@ -16,6 +16,7 @@ use App\Http\Controllers\ProcedureController;
 use App\Http\Controllers\PurgeController;
 use App\Http\Controllers\CleaningController;
 use App\Http\Controllers\GlobalStatsController;
+use App\Http\Controllers\EventController;
 
 // Públicas / Login
 Route::get('/', [AuthController::class, 'loginView'])->name('login');
@@ -26,6 +27,7 @@ Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 Route::get('/messenger', [LunchController::class, 'index'])->name('landing');
 Route::post('/messenger/check-plate', [LunchController::class, 'checkPlate'])->name('messenger.check-plate');
 Route::get('/messenger/{id}/shifts', [LunchController::class, 'getShifts'])->name('messenger.shifts');
+Route::get('/messenger/{id}/events', [EventController::class, 'getForMessenger'])->name('messenger.events');
 Route::post('/lunch', [LunchController::class, 'store'])->name('lunch.store');
 Route::post('/shift-completion', [ShiftCompletionController::class, 'store'])->name('shift-completion.store');
 
@@ -122,6 +124,9 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/admin/purge/execute', [PurgeController::class, 'execute'])->name('admin.purge.execute');
         });
     });
+
+    // 12. Eventos
+    Route::resource('events', EventController::class)->only(['index', 'store', 'update', 'destroy']);
 
     // 11. Trámites
     Route::middleware(['module:procedures.index'])->group(function () {

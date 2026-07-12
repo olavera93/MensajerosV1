@@ -15,11 +15,12 @@ export default function LeaderLayout({ children, title, onPurgeClick }) {
         { label: 'Salida', icon: '🏁', route: 'reports.exit', active: route().current('reports.exit'), roles: ['administrador', 'desarrollador'] },
         { label: 'Formularios', icon: '📝', route: 'external-forms.index', active: route().current('external-forms.*'), roles: ['administrador', 'desarrollador'] },
         { label: 'Mensajeros', icon: '🛵', route: 'messengers.index', active: route().current('messengers.*'), roles: ['administrador', 'desarrollador'] },
-        { label: 'Usuarios', icon: '👤', route: 'users.index', active: route().current('users.*'), roles: ['administrador', 'desarrollador'] },
         { label: 'Trámites', icon: '💼', route: 'procedures.index', active: route().current('procedures.*'), roles: ['administrador', 'desarrollador'] },
+        { label: 'Eventos', icon: '📌', route: 'events.index', active: route().current('events.*'), roles: ['administrador', 'desarrollador'] },
+        { label: 'Usuarios', icon: '👤', route: 'users.index', active: route().current('users.*'), roles: ['administrador', 'desarrollador'] },
     ].filter(item => {
-        // El Desarrollador siempre tiene acceso a todo
-        if (auth.user.role === 'desarrollador') return true;
+        // Desarrollador y administrador tienen acceso a todo (igual que el backend)
+        if (['desarrollador', 'administrador'].includes(auth.user.role)) return true;
 
         // Para los demás roles, el acceso es dinámico por módulos asignados
         return auth.user.modules && auth.user.modules.includes(item.route);
