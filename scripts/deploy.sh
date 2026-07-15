@@ -4,6 +4,8 @@
 
 set -e
 
+cd "$(dirname "$0")/.."
+
 echo "🚀 Iniciando despliegue..."
 
 # Detectar usuario del servidor web

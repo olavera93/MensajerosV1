@@ -1,6 +1,7 @@
 #!/bin/bash
 
 # Script simplificado para desarrollo local (localhost)
+cd "$(dirname "$0")/.."
 
 # Habilitar pdo_mysql via ini personalizado (php.ini del sistema no lo tiene activado)
 export PHP_INI_SCAN_DIR=/tmp/php-conf
