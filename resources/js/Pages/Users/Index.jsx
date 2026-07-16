@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Head, router, useForm } from '@inertiajs/react';
+import { Head, router, useForm, usePage } from '@inertiajs/react';
 import LeaderLayout from '@/Layouts/LeaderLayout';
 import Modal from '@/Components/Modal';
 import PrimaryButton from '@/Components/PrimaryButton';
@@ -10,6 +10,7 @@ import InputLabel from '@/Components/InputLabel';
 import InputError from '@/Components/InputError';
 
 export default function UserIndex({ users }) {
+    const { flash } = usePage().props;
     const [showModal, setShowModal] = useState(false);
     const [editingUser, setEditingUser] = useState(null);
     const { data: form, setData: setForm, post, put, processing, errors, clearErrors, reset } = useForm({
@@ -32,6 +33,7 @@ export default function UserIndex({ users }) {
         { id: 'messengers.index', label: 'Mensajeros', icon: '🛵' },
         { id: 'users.index', label: 'Usuarios', icon: '👤' },
         { id: 'procedures.index', label: 'Trámites', icon: '💼' },
+        { id: 'events.index', label: 'Eventos', icon: '📌' },
     ];
 
     const openModal = (user = null) => {
@@ -92,6 +94,18 @@ export default function UserIndex({ users }) {
                         <span>➕</span> Nuevo Usuario
                     </button>
                 </div>
+
+                {flash.success && (
+                    <div className="bg-emerald-50 dark:bg-emerald-900/20 border-l-4 border-emerald-500 text-emerald-700 dark:text-emerald-300 p-3 mb-6 rounded-lg text-xs font-bold flex items-center gap-3">
+                        <span>✅</span> {flash.success}
+                    </div>
+                )}
+
+                {flash.error && (
+                    <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 text-red-700 dark:text-red-300 p-3 mb-6 rounded-lg text-xs font-bold flex items-center gap-3">
+                        <span>⚠️</span> {flash.error}
+                    </div>
+                )}
 
                 <div className="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
                     <div className="overflow-x-auto">
@@ -229,7 +243,6 @@ export default function UserIndex({ users }) {
                                     required
                                 >
                                     <option value="administrador">Administrador</option>
-                                    <option value="desarrollador">Desarrollador</option>
                                     <option value="lider">Líder</option>
                                     <option value="regente">Regente</option>
                                 </SelectInput>

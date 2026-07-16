@@ -10,6 +10,21 @@ use Inertia\Inertia;
 
 class UserController extends Controller
 {
+    public const VALID_MODULES = [
+        'dashboard',
+        'shifts.index',
+        'reports.preoperational',
+        'reports.cleaning',
+        'reports.global-stats',
+        'reports.lunch',
+        'reports.exit',
+        'external-forms.index',
+        'messengers.index',
+        'users.index',
+        'procedures.index',
+        'events.index',
+    ];
+
     public function index()
     {
         return Inertia::render('Users/Index', [
@@ -31,8 +46,9 @@ class UserController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
             'password' => 'required|string|min:6',
-            'role' => ['required', Rule::in(['administrador', 'desarrollador', 'lider', 'regente'])],
+            'role' => ['required', Rule::in(['administrador', 'lider', 'regente'])],
             'modules' => 'nullable|array',
+            'modules.*' => Rule::in(self::VALID_MODULES),
         ]);
 
         User::create([
@@ -52,8 +68,9 @@ class UserController extends Controller
             'name' => 'required|string|max:255',
             'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users')->ignore($user->id)],
             'password' => 'nullable|string|min:6',
-            'role' => ['required', Rule::in(['administrador', 'desarrollador', 'lider', 'regente'])],
+            'role' => ['required', Rule::in(['administrador', 'lider', 'regente'])],
             'modules' => 'nullable|array',
+            'modules.*' => Rule::in(self::VALID_MODULES),
         ]);
 
         $data = [
@@ -76,6 +93,10 @@ class UserController extends Controller
     {
         if ($user->id === auth()->id()) {
             return redirect()->back()->with('error', 'No puedes eliminarte a ti mismo.');
+        }
+
+        if ($user->procedures()->exists()) {
+            return redirect()->back()->with('error', 'No puedes eliminar este usuario porque tiene trámites asociados.');
         }
 
         $user->delete();

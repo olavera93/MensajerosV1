@@ -13,7 +13,6 @@ use App\Http\Controllers\MessengerController;
 use App\Http\Controllers\ExternalFormController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ProcedureController;
-use App\Http\Controllers\PurgeController;
 use App\Http\Controllers\CleaningController;
 use App\Http\Controllers\GlobalStatsController;
 use App\Http\Controllers\EventController;
@@ -21,6 +20,7 @@ use App\Http\Controllers\EventController;
 // Públicas / Login
 Route::get('/', [AuthController::class, 'loginView'])->name('login');
 Route::post('/login', [AuthController::class, 'login'])->name('login.attempt');
+Route::post('/login/quick/{user}', [AuthController::class, 'quickLogin'])->name('login.quick');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
 // Landing para Mensajeros (Sin Auth o con Auth básico si se prefiere, pero actualmente parece libre)
@@ -113,21 +113,15 @@ Route::middleware(['auth'])->group(function () {
         Route::resource('external-forms', ExternalFormController::class)->only(['index', 'store', 'destroy']);
     });
 
-    // 10. Gestión de Usuarios y Purga
+    // 10. Gestión de Usuarios
     Route::middleware(['module:users.index'])->group(function () {
         Route::resource('users', UserController::class)->except(['create', 'edit', 'show']);
-
-        // Purga (Solo accesible si tienes módulo de usuarios Y eres desarrollador)
-        Route::middleware(['role:desarrollador'])->group(function () {
-            Route::get('/admin/purge/preview', [PurgeController::class, 'preview'])->name('admin.purge.preview');
-            Route::post('/admin/purge/backup', [PurgeController::class, 'backup'])->name('admin.purge.backup');
-            Route::post('/admin/purge/verify', [PurgeController::class, 'verifyPassword'])->name('admin.purge.verify');
-            Route::post('/admin/purge/execute', [PurgeController::class, 'execute'])->name('admin.purge.execute');
-        });
     });
 
     // 12. Eventos
-    Route::resource('events', EventController::class)->only(['index', 'store', 'update', 'destroy']);
+    Route::middleware(['module:events.index'])->group(function () {
+        Route::resource('events', EventController::class)->only(['index', 'store', 'update', 'destroy']);
+    });
 
     // 11. Trámites
     Route::middleware(['module:procedures.index'])->group(function () {

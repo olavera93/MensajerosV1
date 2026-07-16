@@ -1,26 +1,25 @@
 import React from 'react';
 import { Link, usePage, router } from '@inertiajs/react';
-import DataPurgeModal from '@/Components/DataPurgeModal';
 
-export default function LeaderLayout({ children, title, onPurgeClick }) {
+export default function LeaderLayout({ children, title }) {
     const { auth } = usePage().props;
 
     const menuItems = [
-        { label: 'Dashboard', icon: '🏠', route: 'dashboard', active: route().current('dashboard'), roles: ['administrador', 'desarrollador', 'lider'] },
-        { label: 'Horarios', icon: '🕒', route: 'shifts.index', active: route().current('shifts.*'), roles: ['administrador', 'desarrollador'] },
-        { label: 'Preoperacional', icon: '📋', route: 'reports.preoperational', active: route().current('reports.preoperational'), roles: ['administrador', 'desarrollador', 'regente'] },
-        { label: 'Aseo', icon: '✨', route: 'reports.cleaning', active: route().current('reports.cleaning'), roles: ['administrador', 'desarrollador', 'regente'] },
-        { label: 'Estadísticas', icon: '📊', route: 'reports.global-stats', active: route().current('reports.global-stats'), roles: ['administrador', 'desarrollador', 'regente'] },
-        { label: 'Almuerzo', icon: '🍽️', route: 'reports.lunch', active: route().current('reports.lunch'), roles: ['administrador', 'desarrollador', 'lider'] },
-        { label: 'Salida', icon: '🏁', route: 'reports.exit', active: route().current('reports.exit'), roles: ['administrador', 'desarrollador'] },
-        { label: 'Formularios', icon: '📝', route: 'external-forms.index', active: route().current('external-forms.*'), roles: ['administrador', 'desarrollador'] },
-        { label: 'Mensajeros', icon: '🛵', route: 'messengers.index', active: route().current('messengers.*'), roles: ['administrador', 'desarrollador'] },
-        { label: 'Trámites', icon: '💼', route: 'procedures.index', active: route().current('procedures.*'), roles: ['administrador', 'desarrollador'] },
-        { label: 'Eventos', icon: '📌', route: 'events.index', active: route().current('events.*'), roles: ['administrador', 'desarrollador'] },
-        { label: 'Usuarios', icon: '👤', route: 'users.index', active: route().current('users.*'), roles: ['administrador', 'desarrollador'] },
+        { label: 'Dashboard', icon: '🏠', route: 'dashboard', active: route().current('dashboard') },
+        { label: 'Horarios', icon: '🕒', route: 'shifts.index', active: route().current('shifts.*') },
+        { label: 'Preoperacional', icon: '📋', route: 'reports.preoperational', active: route().current('reports.preoperational') },
+        { label: 'Aseo', icon: '✨', route: 'reports.cleaning', active: route().current('reports.cleaning') },
+        { label: 'Estadísticas', icon: '📊', route: 'reports.global-stats', active: route().current('reports.global-stats') },
+        { label: 'Almuerzo', icon: '🍽️', route: 'reports.lunch', active: route().current('reports.lunch') },
+        { label: 'Salida', icon: '🏁', route: 'reports.exit', active: route().current('reports.exit') },
+        { label: 'Formularios', icon: '📝', route: 'external-forms.index', active: route().current('external-forms.*') },
+        { label: 'Mensajeros', icon: '🛵', route: 'messengers.index', active: route().current('messengers.*') },
+        { label: 'Trámites', icon: '💼', route: 'procedures.index', active: route().current('procedures.*') },
+        { label: 'Eventos', icon: '📌', route: 'events.index', active: route().current('events.*') },
+        { label: 'Usuarios', icon: '👤', route: 'users.index', active: route().current('users.*') },
     ].filter(item => {
-        // Desarrollador y administrador tienen acceso a todo (igual que el backend)
-        if (['desarrollador', 'administrador'].includes(auth.user.role)) return true;
+        // Administrador tiene acceso a todo (igual que el backend)
+        if (auth.user.role === 'administrador') return true;
 
         // Para los demás roles, el acceso es dinámico por módulos asignados
         return auth.user.modules && auth.user.modules.includes(item.route);
@@ -28,7 +27,7 @@ export default function LeaderLayout({ children, title, onPurgeClick }) {
 
     // Customize bottom nav items based on role
     let bottomNavItems = [];
-    if (auth.user.role === 'administrador' || auth.user.role === 'desarrollador') {
+    if (auth.user.role === 'administrador') {
         bottomNavItems = [
             menuItems.find(i => i.route === 'dashboard'),
             menuItems.find(i => i.route === 'shifts.index'),
@@ -42,8 +41,6 @@ export default function LeaderLayout({ children, title, onPurgeClick }) {
         e.preventDefault();
         router.post(route('logout'));
     };
-
-    const [showPurgeModal, setShowPurgeModal] = React.useState(false);
 
     const [theme, setTheme] = React.useState(() => {
         if (typeof window !== 'undefined') {
@@ -97,18 +94,6 @@ export default function LeaderLayout({ children, title, onPurgeClick }) {
                             <span className="text-[10px] text-slate-400 uppercase font-black tracking-widest">Usuario</span>
                             <span className="text-xs font-bold text-white">{auth.user.name}</span>
                         </div>
-
-                        {/* Purge button - desktop only */}
-                        {auth.user.role === 'desarrollador' && (
-                            <button
-                                onClick={() => setShowPurgeModal(true)}
-                                className="hidden md:flex items-center gap-1.5 bg-slate-800 hover:bg-red-900/60 border border-red-800/40 text-red-400 hover:text-red-300 px-3 py-2 rounded-lg text-xs font-bold transition-colors duration-200"
-                                title="Depurar base de datos"
-                            >
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                Depurar BD
-                            </button>
-                        )}
 
                         {/* Logout - desktop only */}
                         <button
@@ -177,8 +162,6 @@ export default function LeaderLayout({ children, title, onPurgeClick }) {
                     </button>
                 </div>
             </nav>
-
-            <DataPurgeModal show={showPurgeModal} onClose={() => setShowPurgeModal(false)} />
         </div>
     );
 }

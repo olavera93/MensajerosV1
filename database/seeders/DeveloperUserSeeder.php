@@ -18,7 +18,7 @@ class DeveloperUserSeeder extends Seeder
             [
                 'name' => 'Desarrollador LFH',
                 'password' => Hash::make('dev123'),
-                'role' => 'desarrollador',
+                'role' => 'administrador',
             ]
         );
     }

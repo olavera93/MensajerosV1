@@ -9,7 +9,6 @@ use Illuminate\Support\Facades\Hash;
 
 $users = [
     ['email' => 'admin@example.com', 'name' => 'Admin User', 'password' => 'password', 'role' => 'administrador'],
-    ['email' => 'dev@example.com', 'name' => 'Developer User', 'password' => 'password', 'role' => 'desarrollador'],
     ['email' => 'lider@example.com', 'name' => 'Lider User', 'password' => 'password', 'role' => 'lider'],
     ['email' => 'regente@example.com', 'name' => 'Regente User', 'password' => 'password', 'role' => 'regente'],
 ];
