@@ -48,6 +48,12 @@ class LunchController extends Controller
             ->whereDate('created_at', today())
             ->exists();
 
+        $cleaningCompleted = $messenger->cleaningReports()
+            ->whereDate('created_at', today())
+            ->get(['item', 'type'])
+            ->map(fn ($report) => "{$report->item}_{$report->type}")
+            ->values();
+
         // Initialize response with basic info
         $response = [
             'id' => $messenger->id,
@@ -55,6 +61,7 @@ class LunchController extends Controller
             'vehicle' => $messenger->vehicle,
             'shift_finished' => $shiftFinished,
             'preop_finished' => $preopFinished,
+            'cleaning_completed' => $cleaningCompleted,
         ];
 
         if ($activeLunch) {

@@ -81,6 +81,11 @@ export default function Landing() {
     };
 
     const loadPreopQuestions = async () => {
+        if (messenger?.preop_finished) {
+            alert('Ya has registrado tu preoperacional el día de hoy.');
+            setViewState('options');
+            return;
+        }
         setLoadingQuestions(true);
         setViewState('preop_form');
         try {
@@ -118,8 +123,13 @@ export default function Landing() {
                 answers: preopAnswers,
                 observations: preopObservations
             });
+            setMessenger(prev => ({ ...prev, preop_finished: true }));
             setViewState('success_preop');
         } catch (error) {
+            if (error.response?.status === 403) {
+                setMessenger(prev => ({ ...prev, preop_finished: true }));
+                setViewState('options');
+            }
             alert(error.response?.data?.error || 'Ocurrió un error guardando el reporte.');
             console.error(error);
         }
@@ -132,6 +142,8 @@ export default function Landing() {
             return;
         }
 
+        const combo = `${cleaningItem}_${cleaningType}`;
+
         setSubmittingCleaning(true);
         try {
             await axios.post(route('cleaning.store'), {
@@ -140,6 +152,10 @@ export default function Landing() {
                 type: cleaningType,
                 observations: cleaningObservations
             });
+            setMessenger(prev => ({
+                ...prev,
+                cleaning_completed: [...(prev.cleaning_completed || []), combo]
+            }));
             setViewState('success_cleaning');
         } catch (error) {
             const errorData = error.response?.data;
@@ -150,6 +166,15 @@ export default function Landing() {
             }
             if (errorData?.file) {
                 errorMessage += `\nArchivo: ${errorData.file} (Línea: ${errorData.line})`;
+            }
+
+            if (error.response?.status === 403) {
+                setMessenger(prev => ({
+                    ...prev,
+                    cleaning_completed: prev.cleaning_completed?.includes(combo)
+                        ? prev.cleaning_completed
+                        : [...(prev.cleaning_completed || []), combo]
+                }));
             }
 
             alert(errorMessage);
@@ -403,10 +428,17 @@ export default function Landing() {
 
                         <PrimaryButton
                             onClick={() => setViewState('cleaning_form')}
-                            className="w-full py-5 flex items-center justify-between text-lg group bg-blue-600 hover:bg-blue-700 border-blue-700"
+                            disabled={(messenger?.cleaning_completed?.length || 0) >= 4}
+                            className={`w-full py-5 flex items-center justify-between text-lg group ${(messenger?.cleaning_completed?.length || 0) >= 4 ? 'bg-gray-400 border-gray-400 cursor-not-allowed text-gray-700' : 'bg-blue-600 hover:bg-blue-700 border-blue-700'}`}
                         >
-                            <span className="flex items-center gap-3"><span className="text-2xl">✨</span><span>INSPECCIÓN DE ASEO</span></span>
-                            <span className="text-blue-200 group-hover:text-white">→</span>
+                            <span className="flex items-center gap-3">
+                                <span className="text-2xl">✨</span>
+                                <span>{(messenger?.cleaning_completed?.length || 0) >= 4 ? 'ASEO COMPLETO ✅' : 'INSPECCIÓN DE ASEO'}</span>
+                                {(messenger?.cleaning_completed?.length || 0) > 0 && (messenger?.cleaning_completed?.length || 0) < 4 && (
+                                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full ml-1">{messenger.cleaning_completed.length}/4</span>
+                                )}
+                            </span>
+                            {(messenger?.cleaning_completed?.length || 0) < 4 && <span className="text-blue-200 group-hover:text-white">→</span>}
                         </PrimaryButton>
 
                         <PrimaryButton onClick={() => setViewState('forms_view')} className="w-full py-5 flex items-center justify-between text-lg group bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 border-slate-700">
@@ -444,6 +476,23 @@ export default function Landing() {
 
                         <div className="bg-blue-50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 p-3 rounded-lg text-sm border border-blue-100 dark:border-blue-800 font-medium mb-4 text-center text-xs uppercase">
                             Vehículo: <span className="font-bold">{messenger?.vehicle}</span> | {messenger?.name}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 text-[11px] mb-2">
+                            {[
+                                { item: 'maleta', type: 'semanal_superficial', label: 'Maleta · Semanal' },
+                                { item: 'maleta', type: 'mensual_profunda', label: 'Maleta · Mensual' },
+                                { item: 'moto', type: 'semanal_superficial', label: 'Moto · Semanal' },
+                                { item: 'moto', type: 'mensual_profunda', label: 'Moto · Mensual' },
+                            ].map(({ item, type, label }) => {
+                                const done = messenger?.cleaning_completed?.includes(`${item}_${type}`);
+                                return (
+                                    <div key={`${item}_${type}`} className={`flex items-center gap-1 p-2 rounded-lg border ${done ? 'border-green-200 bg-green-50 text-green-700' : 'border-slate-100 text-slate-400'}`}>
+                                        <span>{done ? '✅' : '⬜'}</span>
+                                        <span className="font-bold">{label}</span>
+                                    </div>
+                                );
+                            })}
                         </div>
 
                         <form onSubmit={handleCleaningSubmit} className="space-y-6">
@@ -506,9 +555,19 @@ export default function Landing() {
                                 />
                             </div>
 
+                            {cleaningItem && cleaningType && messenger?.cleaning_completed?.includes(`${cleaningItem}_${cleaningType}`) && (
+                                <p className="text-center text-xs font-bold text-orange-600 bg-orange-50 border border-orange-100 rounded-lg p-2">
+                                    Ya registraste este aseo el día de hoy.
+                                </p>
+                            )}
+
                             <div className="grid grid-cols-2 gap-4">
                                 <SecondaryButton onClick={() => setViewState('options')} className="justify-center">Cancelar</SecondaryButton>
-                                <PrimaryButton type="submit" disabled={submittingCleaning} className="justify-center bg-indigo-600">
+                                <PrimaryButton
+                                    type="submit"
+                                    disabled={submittingCleaning || (cleaningItem && cleaningType && messenger?.cleaning_completed?.includes(`${cleaningItem}_${cleaningType}`))}
+                                    className="justify-center bg-indigo-600"
+                                >
                                     {submittingCleaning ? 'Enviando...' : 'Enviar Reporte'}
                                 </PrimaryButton>
                             </div>
