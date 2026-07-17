@@ -1,3 +1,11 @@
+# Logística LFH — Mensajeros
+
+Aplicación Laravel + Inertia/React para gestión de mensajeros, turnos y reportes.
+
+- `docs/` — documentación del proyecto (despliegue a GoDaddy, usuarios por rol, historial de cambios a producción).
+- `scripts/` — scripts operativos: `start.sh`/`stop.sh` (desarrollo local), `deploy.sh` (despliegue), utilidades PHP puntuales (`check_users.php`, `create_fast_users.php`, `run_route.php`).
+- `releases/` — zips de despliegue generados localmente (no versionados en git).
+
 <p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
 
 <p align="center">

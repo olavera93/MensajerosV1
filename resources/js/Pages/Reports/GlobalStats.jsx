@@ -4,12 +4,51 @@ import { Head } from '@inertiajs/react';
 import TextInput from '@/Components/TextInput';
 import MessengerSearchSelect from '@/Components/MessengerSearchSelect';
 
+const today = () => new Date().toISOString().slice(0, 10);
+
+function CheckCell({ ok }) {
+    return ok
+        ? <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 font-black text-sm">✓</span>
+        : <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-red-100 dark:bg-red-900/40 text-red-500 dark:text-red-400 font-black text-sm">✗</span>;
+}
+
+function fmtDate(iso) {
+    // "2026-07-11" → "Vie 11 jul"
+    const d = new Date(iso + 'T12:00:00');
+    return d.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
 export default function GlobalStats({ filters, messengers }) {
     const [startDate, setStartDate] = useState(filters?.start_date || '');
     const [endDate, setEndDate] = useState(filters?.end_date || '');
     const [messengerId, setMessengerId] = useState(filters?.messenger_id || '');
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
+
+    // ── Alertas (comparte filtros con las estadísticas) ───────────────────────
+    const [alertData, setAlertData] = useState(null);
+    const [alertLoading, setAlertLoading] = useState(true);
+
+    const fetchAlerts = useCallback(async () => {
+        setAlertLoading(true);
+        setAlertFilter('all');
+        try {
+            const params = new URLSearchParams({
+                start_date: startDate, end_date: endDate,
+                messenger_id: messengerId, _t: Date.now(),
+            });
+            const res = await fetch(`${route('reports.global-stats.alerts')}?${params}`);
+            setAlertData(await res.json());
+        } catch {
+            setAlertData(null);
+        } finally {
+            setAlertLoading(false);
+        }
+    }, [startDate, endDate, messengerId]);
+
+    useEffect(() => { fetchAlerts(); }, [fetchAlerts]);
+
+    const [alertFilter, setAlertFilter] = useState('all');
 
     const fetchData = useCallback(async () => {
         setLoading(true);
@@ -260,6 +299,152 @@ export default function GlobalStats({ filters, messengers }) {
                                     </div>
                                 </div>
                             </div>
+                        </div>
+
+                        {/* ── Sección de alertas de cumplimiento ── */}
+                        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden">
+                            {/* Cabecera */}
+                            <div className="flex items-center gap-2 px-6 py-4 border-b border-slate-100 dark:border-slate-700">
+                                <span className="w-2.5 h-2.5 bg-rose-500 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.4)]" />
+                                <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 uppercase tracking-wider">
+                                    Alertas de Cumplimiento
+                                </h3>
+                                <span className="ml-1 text-[11px] text-slate-400 font-medium">
+                                    — mismo período del filtro superior
+                                </span>
+                            </div>
+
+                            {/* Filtros */}
+                            {!alertLoading && !!alertData?.alerts?.length && (() => {
+                                const rows = alertData.alerts;
+                                const FILTERS = [
+                                    { key: 'all',      label: 'Todos',         count: rows.length,                                   cls: 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300',         active: 'bg-slate-700 dark:bg-slate-300 text-white dark:text-slate-900' },
+                                    { key: 'complete', label: '✓ Completos',   count: rows.filter(r => [r.preop,r.cleaning,r.lunch,r.exit].every(Boolean)).length, cls: 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400', active: 'bg-emerald-500 text-white' },
+                                    { key: 'preop',    label: '✗ Preop',       count: rows.filter(r => !r.preop).length,             cls: 'bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400',   active: 'bg-orange-500 text-white' },
+                                    { key: 'cleaning', label: '✗ Aseo',        count: rows.filter(r => !r.cleaning).length,          cls: 'bg-teal-50 dark:bg-teal-900/20 text-teal-600 dark:text-teal-400',           active: 'bg-teal-500 text-white' },
+                                    { key: 'lunch',    label: '✗ Almuerzo',    count: rows.filter(r => !r.lunch).length,             cls: 'bg-sky-50 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400',               active: 'bg-sky-500 text-white' },
+                                    { key: 'exit',     label: '✗ Fin turno',   count: rows.filter(r => !r.exit).length,              cls: 'bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400',           active: 'bg-rose-500 text-white' },
+                                ];
+                                return (
+                                    <div className="flex flex-wrap gap-2 px-5 py-3 border-b border-slate-100 dark:border-slate-700">
+                                        {FILTERS.map(f => (
+                                            <button
+                                                key={f.key}
+                                                onClick={() => setAlertFilter(f.key)}
+                                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-black transition-all ${alertFilter === f.key ? f.active : f.cls + ' hover:opacity-80'}`}
+                                            >
+                                                {f.label}
+                                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${alertFilter === f.key ? 'bg-white/25' : 'bg-black/8 dark:bg-white/10'}`}>
+                                                    {f.count}
+                                                </span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                );
+                            })()}
+
+                            {/* Tabla */}
+                            {alertLoading ? (
+                                <div className="flex justify-center py-10">
+                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-rose-500" />
+                                </div>
+                            ) : !alertData?.alerts?.length ? (
+                                <div className="flex flex-col items-center justify-center py-12 text-slate-400 dark:text-slate-500">
+                                    <span className="text-4xl mb-3">📭</span>
+                                    <p className="text-sm font-bold">Sin turnos en el período seleccionado</p>
+                                </div>
+                            ) : (() => {
+                                // Aplicar filtro seleccionado
+                                const FILTER_FN = {
+                                    all:      () => true,
+                                    complete: r => [r.preop, r.cleaning, r.lunch, r.exit].every(Boolean),
+                                    preop:    r => !r.preop,
+                                    cleaning: r => !r.cleaning,
+                                    lunch:    r => !r.lunch,
+                                    exit:     r => !r.exit,
+                                };
+                                const rows = alertData.alerts.filter(FILTER_FN[alertFilter] ?? (() => true));
+                                const dateGroups = [];
+                                let lastDate = null;
+                                rows.forEach(row => {
+                                    if (row.date !== lastDate) {
+                                        dateGroups.push({ date: row.date, rows: [] });
+                                        lastDate = row.date;
+                                    }
+                                    dateGroups[dateGroups.length - 1].rows.push(row);
+                                });
+
+                                return (
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-sm">
+                                            <thead>
+                                                <tr className="bg-slate-50 dark:bg-slate-700/40 text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                                                    <th className="text-left px-4 py-3 w-28">Fecha</th>
+                                                    <th className="text-left px-4 py-3">Mensajero</th>
+                                                    <th className="text-center px-3 py-3"><span className="flex flex-col items-center gap-0.5"><span className="text-orange-500">📋</span>Preop</span></th>
+                                                    <th className="text-center px-3 py-3"><span className="flex flex-col items-center gap-0.5"><span className="text-emerald-500">✨</span>Aseo</span></th>
+                                                    <th className="text-center px-3 py-3"><span className="flex flex-col items-center gap-0.5"><span className="text-sky-500">🍽️</span>Almuerzo</span></th>
+                                                    <th className="text-center px-3 py-3"><span className="flex flex-col items-center gap-0.5"><span className="text-rose-500">🏁</span>Fin turno</span></th>
+                                                    <th className="text-center px-3 py-3">Total</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {dateGroups.map(({ date, rows: dayRows }) => (
+                                                    <React.Fragment key={date}>
+                                                        {dayRows.map((row, ri) => {
+                                                            const done  = [row.preop, row.cleaning, row.lunch, row.exit].filter(Boolean).length;
+                                                            const allOk = done === 4;
+                                                            return (
+                                                                <tr
+                                                                    key={row.messenger_id}
+                                                                    className={`border-t border-slate-50 dark:border-slate-700/50 transition-colors ${allOk ? 'bg-emerald-50/30 dark:bg-emerald-900/10' : 'hover:bg-slate-50 dark:hover:bg-slate-700/20'}`}
+                                                                >
+                                                                    {/* Fecha: solo en la primera fila del grupo */}
+                                                                    {ri === 0 ? (
+                                                                        <td rowSpan={dayRows.length} className="px-4 py-2 align-top border-t-2 border-slate-200 dark:border-slate-600">
+                                                                            <span className="text-[11px] font-black text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                                                                                {fmtDate(date)}
+                                                                            </span>
+                                                                        </td>
+                                                                    ) : null}
+                                                                    <td className="px-4 py-2 font-bold text-slate-800 dark:text-slate-200 whitespace-nowrap">{row.messenger_name}</td>
+                                                                    <td className="px-3 py-2 text-center"><CheckCell ok={row.preop} /></td>
+                                                                    <td className="px-3 py-2 text-center"><CheckCell ok={row.cleaning} /></td>
+                                                                    <td className="px-3 py-2 text-center"><CheckCell ok={row.lunch} /></td>
+                                                                    <td className="px-3 py-2 text-center"><CheckCell ok={row.exit} /></td>
+                                                                    <td className="px-3 py-2 text-center">
+                                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-black ${allOk ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : done === 0 ? 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400' : 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300'}`}>
+                                                                            {done}/4
+                                                                        </span>
+                                                                    </td>
+                                                                </tr>
+                                                            );
+                                                        })}
+                                                    </React.Fragment>
+                                                ))}
+                                            </tbody>
+                                        </table>
+
+                                        {/* Resumen pie de tabla */}
+                                        <div className="px-6 py-3 border-t border-slate-100 dark:border-slate-700 flex flex-wrap gap-5 text-[11px] font-bold text-slate-400">
+                                            {(() => {
+                                                const total = rows.length;
+                                                return [
+                                                    { label: 'Preop',     val: rows.filter(r => r.preop).length,    color: 'text-orange-500' },
+                                                    { label: 'Aseo',      val: rows.filter(r => r.cleaning).length, color: 'text-emerald-500' },
+                                                    { label: 'Almuerzo',  val: rows.filter(r => r.lunch).length,    color: 'text-sky-500' },
+                                                    { label: 'Fin turno', val: rows.filter(r => r.exit).length,     color: 'text-rose-500' },
+                                                ].map(({ label, val, color }) => (
+                                                    <span key={label}>
+                                                        {label}: <span className={`${color} font-black`}>{val}</span>
+                                                        <span className="text-slate-300 dark:text-slate-600">/{total}</span>
+                                                    </span>
+                                                ));
+                                            })()}
+                                        </div>
+                                    </div>
+                                );
+                            })()}
                         </div>
                     </div>
                 )}

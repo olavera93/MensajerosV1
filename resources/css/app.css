@@ -1,5 +1,8 @@
 @import 'tailwindcss';
 
+/* Modo oscuro basado en clase .dark en <html>, no en prefers-color-scheme */
+@variant dark (&:is(.dark, .dark *));
+
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
 @source '../**/*.blade.php';

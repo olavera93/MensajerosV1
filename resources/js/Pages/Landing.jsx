@@ -1,4 +1,9 @@
 import React, { useState } from 'react';
+import dayjs from 'dayjs';
+import 'dayjs/locale/es';
+import isoWeek from 'dayjs/plugin/isoWeek';
+dayjs.extend(isoWeek);
+dayjs.locale('es');
 import { Head, useForm, usePage, router } from '@inertiajs/react';
 import axios from 'axios';
 import TextInput from '@/Components/TextInput';
@@ -17,9 +22,13 @@ export default function Landing() {
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(false);
     const [activeLunch, setActiveLunch] = useState(null);
-    const [selectedWeek, setSelectedWeek] = useState(null);
+    const [shiftsWeekDate, setShiftsWeekDate] = useState(null);
     const [weekShifts, setWeekShifts] = useState([]);
     const [shiftsLoading, setShiftsLoading] = useState(false);
+
+    const [eventsWeekDate, setEventsWeekDate] = useState(null);
+    const [weekEvents, setWeekEvents] = useState([]);
+    const [eventsLoading, setEventsLoading] = useState(false);
 
     // Preoperational State
     const [preopQuestions, setPreopQuestions] = useState([]);
@@ -72,6 +81,11 @@ export default function Landing() {
     };
 
     const loadPreopQuestions = async () => {
+        if (messenger?.preop_finished) {
+            alert('Ya has registrado tu preoperacional el día de hoy.');
+            setViewState('options');
+            return;
+        }
         setLoadingQuestions(true);
         setViewState('preop_form');
         try {
@@ -109,8 +123,13 @@ export default function Landing() {
                 answers: preopAnswers,
                 observations: preopObservations
             });
+            setMessenger(prev => ({ ...prev, preop_finished: true }));
             setViewState('success_preop');
         } catch (error) {
+            if (error.response?.status === 403) {
+                setMessenger(prev => ({ ...prev, preop_finished: true }));
+                setViewState('options');
+            }
             alert(error.response?.data?.error || 'Ocurrió un error guardando el reporte.');
             console.error(error);
         }
@@ -123,6 +142,8 @@ export default function Landing() {
             return;
         }
 
+        const combo = `${cleaningItem}_${cleaningType}`;
+
         setSubmittingCleaning(true);
         try {
             await axios.post(route('cleaning.store'), {
@@ -131,6 +152,10 @@ export default function Landing() {
                 type: cleaningType,
                 observations: cleaningObservations
             });
+            setMessenger(prev => ({
+                ...prev,
+                cleaning_completed: [...(prev.cleaning_completed || []), combo]
+            }));
             setViewState('success_cleaning');
         } catch (error) {
             const errorData = error.response?.data;
@@ -141,6 +166,15 @@ export default function Landing() {
             }
             if (errorData?.file) {
                 errorMessage += `\nArchivo: ${errorData.file} (Línea: ${errorData.line})`;
+            }
+
+            if (error.response?.status === 403) {
+                setMessenger(prev => ({
+                    ...prev,
+                    cleaning_completed: prev.cleaning_completed?.includes(combo)
+                        ? prev.cleaning_completed
+                        : [...(prev.cleaning_completed || []), combo]
+                }));
             }
 
             alert(errorMessage);
@@ -181,12 +215,13 @@ export default function Landing() {
         }
     };
 
-    const loadShifts = async (week) => {
-        setSelectedWeek(week);
+    const loadShifts = async (weekMonday) => {
+        setShiftsWeekDate(weekMonday);
         setShiftsLoading(true);
         try {
             const res = await axios.get(route('messenger.shifts', messenger.id), {
-                params: { week }
+                params: { date: weekMonday.format('YYYY-MM-DD'), _t: Date.now() },
+                headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
             });
             setWeekShifts(res.data.shifts || []);
         } catch {
@@ -196,14 +231,32 @@ export default function Landing() {
         }
     };
 
+    const loadEvents = async (weekMonday) => {
+        setEventsWeekDate(weekMonday);
+        setEventsLoading(true);
+        try {
+            const res = await axios.get(route('messenger.events', messenger.id), {
+                params: { date: weekMonday.format('YYYY-MM-DD'), _t: Date.now() },
+                headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
+            });
+            setWeekEvents(res.data.events || []);
+        } catch {
+            setWeekEvents([]);
+        } finally {
+            setEventsLoading(false);
+        }
+    };
+
     const resetAll = () => {
         setViewState('search');
         setMessenger(null);
         setPlate('');
         setError(null);
         setActiveLunch(null);
-        setSelectedWeek(null);
+        setShiftsWeekDate(null);
         setWeekShifts([]);
+        setEventsWeekDate(null);
+        setWeekEvents([]);
         setCleaningItem('');
         setCleaningType('');
         setCleaningObservations('');
@@ -340,9 +393,28 @@ export default function Landing() {
 
                 {viewState === 'options' && (
                     <div className="space-y-4">
-                        <PrimaryButton onClick={() => setViewState('shifts_view')} className="w-full py-5 flex items-center justify-between text-lg group">
+                        <PrimaryButton
+                            onClick={() => {
+                                const monday = dayjs().isoWeekday(1).startOf('day');
+                                setViewState('shifts_view');
+                                loadShifts(monday);
+                            }}
+                            className="w-full py-5 flex items-center justify-between text-lg group"
+                        >
                             <span className="flex items-center gap-3"><span className="text-2xl">📅</span><span>VER MIS HORARIOS</span></span>
                             <span className="text-indigo-200 group-hover:text-white">→</span>
+                        </PrimaryButton>
+
+                        <PrimaryButton
+                            onClick={() => {
+                                const monday = dayjs().isoWeekday(1).startOf('day');
+                                setViewState('events_view');
+                                loadEvents(monday);
+                            }}
+                            className="w-full py-5 flex items-center justify-between text-lg group bg-violet-600 hover:bg-violet-700 border-violet-700"
+                        >
+                            <span className="flex items-center gap-3"><span className="text-2xl">📌</span><span>MIS EVENTOS</span></span>
+                            <span className="text-violet-200 group-hover:text-white">→</span>
                         </PrimaryButton>
 
                         <PrimaryButton
@@ -356,10 +428,17 @@ export default function Landing() {
 
                         <PrimaryButton
                             onClick={() => setViewState('cleaning_form')}
-                            className="w-full py-5 flex items-center justify-between text-lg group bg-blue-600 hover:bg-blue-700 border-blue-700"
+                            disabled={(messenger?.cleaning_completed?.length || 0) >= 4}
+                            className={`w-full py-5 flex items-center justify-between text-lg group ${(messenger?.cleaning_completed?.length || 0) >= 4 ? 'bg-gray-400 border-gray-400 cursor-not-allowed text-gray-700' : 'bg-blue-600 hover:bg-blue-700 border-blue-700'}`}
                         >
-                            <span className="flex items-center gap-3"><span className="text-2xl">✨</span><span>INSPECCIÓN DE ASEO</span></span>
-                            <span className="text-blue-200 group-hover:text-white">→</span>
+                            <span className="flex items-center gap-3">
+                                <span className="text-2xl">✨</span>
+                                <span>{(messenger?.cleaning_completed?.length || 0) >= 4 ? 'ASEO COMPLETO ✅' : 'INSPECCIÓN DE ASEO'}</span>
+                                {(messenger?.cleaning_completed?.length || 0) > 0 && (messenger?.cleaning_completed?.length || 0) < 4 && (
+                                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full ml-1">{messenger.cleaning_completed.length}/4</span>
+                                )}
+                            </span>
+                            {(messenger?.cleaning_completed?.length || 0) < 4 && <span className="text-blue-200 group-hover:text-white">→</span>}
                         </PrimaryButton>
 
                         <PrimaryButton onClick={() => setViewState('forms_view')} className="w-full py-5 flex items-center justify-between text-lg group bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 border-slate-700">
@@ -397,6 +476,23 @@ export default function Landing() {
 
                         <div className="bg-blue-50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 p-3 rounded-lg text-sm border border-blue-100 dark:border-blue-800 font-medium mb-4 text-center text-xs uppercase">
                             Vehículo: <span className="font-bold">{messenger?.vehicle}</span> | {messenger?.name}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 text-[11px] mb-2">
+                            {[
+                                { item: 'maleta', type: 'semanal_superficial', label: 'Maleta · Semanal' },
+                                { item: 'maleta', type: 'mensual_profunda', label: 'Maleta · Mensual' },
+                                { item: 'moto', type: 'semanal_superficial', label: 'Moto · Semanal' },
+                                { item: 'moto', type: 'mensual_profunda', label: 'Moto · Mensual' },
+                            ].map(({ item, type, label }) => {
+                                const done = messenger?.cleaning_completed?.includes(`${item}_${type}`);
+                                return (
+                                    <div key={`${item}_${type}`} className={`flex items-center gap-1 p-2 rounded-lg border ${done ? 'border-green-200 bg-green-50 text-green-700' : 'border-slate-100 text-slate-400'}`}>
+                                        <span>{done ? '✅' : '⬜'}</span>
+                                        <span className="font-bold">{label}</span>
+                                    </div>
+                                );
+                            })}
                         </div>
 
                         <form onSubmit={handleCleaningSubmit} className="space-y-6">
@@ -459,9 +555,19 @@ export default function Landing() {
                                 />
                             </div>
 
+                            {cleaningItem && cleaningType && messenger?.cleaning_completed?.includes(`${cleaningItem}_${cleaningType}`) && (
+                                <p className="text-center text-xs font-bold text-orange-600 bg-orange-50 border border-orange-100 rounded-lg p-2">
+                                    Ya registraste este aseo el día de hoy.
+                                </p>
+                            )}
+
                             <div className="grid grid-cols-2 gap-4">
                                 <SecondaryButton onClick={() => setViewState('options')} className="justify-center">Cancelar</SecondaryButton>
-                                <PrimaryButton type="submit" disabled={submittingCleaning} className="justify-center bg-indigo-600">
+                                <PrimaryButton
+                                    type="submit"
+                                    disabled={submittingCleaning || (cleaningItem && cleaningType && messenger?.cleaning_completed?.includes(`${cleaningItem}_${cleaningType}`))}
+                                    className="justify-center bg-indigo-600"
+                                >
                                     {submittingCleaning ? 'Enviando...' : 'Enviar Reporte'}
                                 </PrimaryButton>
                             </div>
@@ -524,46 +630,137 @@ export default function Landing() {
                 )}
 
                 {viewState === 'shifts_view' && (
-                    <div className="space-y-6">
+                    <div className="space-y-4">
                         <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100 text-center">Mis Turnos</h3>
-                        <div className="flex bg-gray-100 p-1 rounded-xl">
+
+                        {/* Navegación de semana */}
+                        <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-700 p-1.5 rounded-xl">
                             <button
-                                onClick={() => loadShifts('current')}
-                                className={`flex-1 py-2 px-4 rounded-lg font-bold text-xs ${selectedWeek === 'current' ? 'bg-white shadow' : 'text-gray-500'}`}
+                                onClick={() => shiftsWeekDate && loadShifts(shiftsWeekDate.subtract(1, 'week'))}
+                                className="w-10 h-9 flex items-center justify-center bg-white dark:bg-gray-800 rounded-lg font-black text-indigo-600 shadow-sm hover:bg-indigo-50 active:scale-95 transition-all"
                             >
-                                ESTA SEMANA
+                                ←
                             </button>
+
+                            <div className="flex-1 text-center">
+                                {shiftsWeekDate ? (
+                                    <span className="text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-tight">
+                                        {shiftsWeekDate.format('D MMM')} – {shiftsWeekDate.add(6, 'day').format('D MMM')}
+                                    </span>
+                                ) : (
+                                    <span className="text-xs text-gray-400">Cargando...</span>
+                                )}
+                            </div>
+
                             <button
-                                onClick={() => loadShifts('next')}
-                                className={`flex-1 py-2 px-4 rounded-lg font-bold text-xs ${selectedWeek === 'next' ? 'bg-white shadow' : 'text-gray-500'}`}
+                                onClick={() => shiftsWeekDate && loadShifts(shiftsWeekDate.add(1, 'week'))}
+                                className="w-10 h-9 flex items-center justify-center bg-white dark:bg-gray-800 rounded-lg font-black text-indigo-600 shadow-sm hover:bg-indigo-50 active:scale-95 transition-all"
                             >
-                                PRÓX. SEMANA
+                                →
                             </button>
                         </div>
+
+                        {/* Lista de turnos */}
                         <div className="space-y-3 max-h-[50vh] overflow-y-auto">
                             {shiftsLoading ? (
                                 <div className="flex justify-center py-8">
                                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500"></div>
                                 </div>
-                            ) : selectedWeek === null ? (
-                                <p className="text-center text-gray-400 py-8 text-sm">Selecciona una semana para ver tus turnos.</p>
                             ) : weekShifts.length === 0 ? (
-                                <p className="text-center text-gray-500 py-8">Sin turnos registrados.</p>
+                                <p className="text-center text-gray-500 py-8 text-sm">Sin turnos registrados esta semana.</p>
                             ) : (
                                 weekShifts.map((shift, i) => (
-                                    <div key={i} className={`p-4 rounded-lg border-l-4 ${shift.is_today ? 'bg-indigo-50 border-indigo-500' : 'bg-white border-gray-300'}`}>
-                                        <p className="font-bold text-xs uppercase">{shift.date}</p>
-                                        <p className="text-xs">
+                                    <div key={i} className={`p-4 rounded-xl border-l-4 ${shift.is_today ? 'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-500' : 'bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600'}`}>
+                                        <p className={`font-black text-xs uppercase mb-1 ${shift.is_today ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                                            {shift.date}{shift.is_today && ' · HOY'}
+                                        </p>
+                                        <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
                                             {shift.start_time === 'NO ASISTE' || shift.start_time === 'SIN TURNO'
                                                 ? <span className="font-black text-red-500">{shift.start_time}</span>
-                                                : `${shift.start_time} - ${shift.end_time}`}
-                                            {shift.location !== '-' && ` | `}
-                                            <span className="font-bold" translate="no">{shift.location !== '-' ? shift.location : ''}</span>
+                                                : <span>{shift.start_time} – {shift.end_time}</span>}
+                                            {shift.location !== '-' && (
+                                                <span className="ml-2 text-xs text-gray-400 font-normal" translate="no">· {shift.location}</span>
+                                            )}
                                         </p>
                                     </div>
                                 ))
                             )}
                         </div>
+
+                        <SecondaryButton onClick={() => setViewState('options')} className="w-full justify-center">Volver</SecondaryButton>
+                    </div>
+                )}
+
+                {viewState === 'events_view' && (
+                    <div className="space-y-4">
+                        <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100 text-center">Mis Eventos</h3>
+
+                        {/* Navegación de semana */}
+                        <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-700 p-1.5 rounded-xl">
+                            <button
+                                onClick={() => eventsWeekDate && loadEvents(eventsWeekDate.subtract(1, 'week'))}
+                                className="w-10 h-9 flex items-center justify-center bg-white dark:bg-gray-800 rounded-lg font-black text-violet-600 shadow-sm hover:bg-violet-50 active:scale-95 transition-all"
+                            >
+                                ←
+                            </button>
+                            <div className="flex-1 text-center">
+                                {eventsWeekDate ? (
+                                    <span className="text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-tight">
+                                        {eventsWeekDate.format('D MMM')} – {eventsWeekDate.add(6, 'day').format('D MMM')}
+                                    </span>
+                                ) : (
+                                    <span className="text-xs text-gray-400">Cargando...</span>
+                                )}
+                            </div>
+                            <button
+                                onClick={() => eventsWeekDate && loadEvents(eventsWeekDate.add(1, 'week'))}
+                                className="w-10 h-9 flex items-center justify-center bg-white dark:bg-gray-800 rounded-lg font-black text-violet-600 shadow-sm hover:bg-violet-50 active:scale-95 transition-all"
+                            >
+                                →
+                            </button>
+                        </div>
+
+                        {/* Lista de eventos */}
+                        <div className="space-y-3 max-h-[50vh] overflow-y-auto">
+                            {eventsLoading ? (
+                                <div className="flex justify-center py-8">
+                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-500"></div>
+                                </div>
+                            ) : weekEvents.length === 0 ? (
+                                <p className="text-center text-gray-400 py-8 text-sm">Sin eventos esta semana.</p>
+                            ) : (
+                                weekEvents.map((ev, i) => (
+                                    <div
+                                        key={i}
+                                        className={`p-4 rounded-xl border-l-4 ${
+                                            ev.is_today
+                                                ? 'bg-violet-50 dark:bg-violet-900/30 border-violet-500'
+                                                : ev.scope === 'all'
+                                                    ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-400'
+                                                    : 'bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600'
+                                        }`}
+                                    >
+                                        <div className="flex items-start justify-between gap-2 mb-1">
+                                            <p className="font-black text-sm text-slate-800 dark:text-slate-100 leading-tight">
+                                                {ev.title}
+                                            </p>
+                                            {ev.scope === 'all' && (
+                                                <span className="shrink-0 text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-300">
+                                                    Todos
+                                                </span>
+                                            )}
+                                        </div>
+                                        <p className="text-xs text-slate-500 dark:text-slate-400 capitalize">
+                                            {ev.start_datetime}
+                                        </p>
+                                        <p className="text-xs text-slate-400 dark:text-slate-500">
+                                            hasta: {ev.end_datetime}
+                                        </p>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+
                         <SecondaryButton onClick={() => setViewState('options')} className="w-full justify-center">Volver</SecondaryButton>
                     </div>
                 )}

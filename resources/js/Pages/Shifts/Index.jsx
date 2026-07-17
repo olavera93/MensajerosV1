@@ -279,16 +279,38 @@ export default function ShiftsIndex({ auth, messengers, weekStart, weekEnd }) {
                             )}
                         </div>
 
-                        <div className="flex items-center justify-between sm:justify-center gap-4 bg-slate-100 dark:bg-slate-900/50 p-2 rounded-2xl">
+                        <div className="flex items-center justify-between sm:justify-center gap-2 bg-slate-100 dark:bg-slate-900/50 p-2 rounded-2xl">
                             <Link
                                 href={`/shifts?date=${start.subtract(1, 'week').format('YYYY-MM-DD')}`}
                                 className="p-2 sm:px-4 bg-white dark:bg-slate-800 rounded-xl hover:bg-indigo-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition"
                             >
                                 <span className="font-black text-indigo-600">←</span>
                             </Link>
-                            <span className="text-xs sm:text-sm font-black text-slate-700 dark:text-slate-200 uppercase tracking-tight text-center px-2">
-                                {start.format('D MMM')} - {dayjs(weekEnd).format('D MMM')}
-                            </span>
+
+                            {/* Selector de semana: muestra rango y abre date picker al hacer clic */}
+                            <label className="relative flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-indigo-50 dark:hover:bg-slate-700 transition group">
+                                <svg className="w-3.5 h-3.5 text-indigo-400 shrink-0 group-hover:text-indigo-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                                <span className="text-xs sm:text-sm font-black text-slate-700 dark:text-slate-200 uppercase tracking-tight whitespace-nowrap">
+                                    {start.format('D MMM')} – {dayjs(weekEnd).format('D MMM')}
+                                </span>
+                                <input
+                                    type="date"
+                                    value={start.format('YYYY-MM-DD')}
+                                    onChange={e => { if (e.target.value) router.get(`/shifts?date=${e.target.value}`); }}
+                                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                                />
+                            </label>
+
+                            {/* Botón Hoy */}
+                            <button
+                                onClick={() => router.get('/shifts')}
+                                className="hidden sm:flex items-center px-3 py-2 bg-white dark:bg-slate-800 rounded-xl hover:bg-indigo-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-[11px] font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-widest transition"
+                            >
+                                Hoy
+                            </button>
+
                             <Link
                                 href={`/shifts?date=${start.add(1, 'week').format('YYYY-MM-DD')}`}
                                 className="p-2 sm:px-4 bg-white dark:bg-slate-800 rounded-xl hover:bg-indigo-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition"

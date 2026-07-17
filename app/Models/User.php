@@ -48,4 +48,9 @@ class User extends Authenticatable
             'modules' => 'array',
         ];
     }
+
+    public function procedures()
+    {
+        return $this->hasMany(Procedure::class);
+    }
 }

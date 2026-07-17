@@ -42,6 +42,75 @@ class GlobalStatsController extends Controller
     }
 
     /**
+     * API: Compliance alerts — which messengers missed tasks in a date range.
+     */
+    public function alerts(Request $request)
+    {
+        $start       = $request->input('start_date', Carbon::today()->toDateString());
+        $end         = $request->input('end_date',   Carbon::today()->toDateString());
+        $messengerId = $request->input('messenger_id');
+
+        $shiftsQuery = Shift::whereBetween('date', [$start, $end])
+            ->where('status', '!=', 'absent')
+            ->whereHas('messenger', fn($q) => $q->where('is_active', true)->where('exclude_from_analytics', false))
+            ->with('messenger:id,name');
+
+        if ($messengerId) {
+            $shiftsQuery->where('messenger_id', $messengerId);
+        }
+
+        $shifts = $shiftsQuery->get();
+
+        if ($shifts->isEmpty()) {
+            return response()->json(['alerts' => []]);
+        }
+
+        $ids = $shifts->pluck('messenger_id')->unique();
+
+        // Sets de lookup "YYYY-MM-DD:messenger_id" para O(1)
+        $preopSet = PreoperationalReport::whereBetween('created_at', [$start . ' 00:00:00', $end . ' 23:59:59'])
+            ->whereIn('messenger_id', $ids)
+            ->select('messenger_id', DB::raw('DATE(created_at) as dt'))
+            ->distinct()->get()
+            ->mapWithKeys(fn($r) => [$r->dt . ':' . $r->messenger_id => true]);
+
+        $cleanSet = CleaningReport::whereBetween('created_at', [$start . ' 00:00:00', $end . ' 23:59:59'])
+            ->whereIn('messenger_id', $ids)
+            ->select('messenger_id', DB::raw('DATE(created_at) as dt'))
+            ->distinct()->get()
+            ->mapWithKeys(fn($r) => [$r->dt . ':' . $r->messenger_id => true]);
+
+        $lunchSet = LunchLog::whereBetween('start_time', [$start . ' 00:00:00', $end . ' 23:59:59'])
+            ->whereIn('messenger_id', $ids)
+            ->select('messenger_id', DB::raw('DATE(start_time) as dt'))
+            ->distinct()->get()
+            ->mapWithKeys(fn($r) => [$r->dt . ':' . $r->messenger_id => true]);
+
+        $exitSet = ShiftCompletion::whereBetween('created_at', [$start . ' 00:00:00', $end . ' 23:59:59'])
+            ->whereIn('messenger_id', $ids)
+            ->select('messenger_id', DB::raw('DATE(created_at) as dt'))
+            ->distinct()->get()
+            ->mapWithKeys(fn($r) => [$r->dt . ':' . $r->messenger_id => true]);
+
+        $alerts = $shifts
+            ->sort(fn($a, $b) => $a->date === $b->date
+                ? strcmp($a->messenger->name, $b->messenger->name)
+                : strcmp($a->date, $b->date))
+            ->map(fn($s) => [
+                'date'           => $s->date,
+                'messenger_id'   => $s->messenger_id,
+                'messenger_name' => $s->messenger->name,
+                'preop'          => isset($preopSet[$s->date . ':' . $s->messenger_id]),
+                'cleaning'       => isset($cleanSet[$s->date . ':' . $s->messenger_id]),
+                'lunch'          => isset($lunchSet[$s->date . ':' . $s->messenger_id]),
+                'exit'           => isset($exitSet[$s->date . ':' . $s->messenger_id]),
+            ])
+            ->values();
+
+        return response()->json(['alerts' => $alerts]);
+    }
+
+    /**
      * Export global operational details to Excel.
      */
     public function export(Request $request)

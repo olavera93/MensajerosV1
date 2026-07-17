@@ -191,11 +191,20 @@ export default function Dashboard({ messengers, dispatch_locations, beetrack_dat
             body: formData,
             headers: {
                 'X-CSRF-TOKEN': token,
+                'Accept': 'application/json',
             }
         })
-            .then(response => {
+            .then(async response => {
                 if (response.ok) return response.blob();
-                throw new Error('Error generador archivo');
+
+                let message = 'No se pudo generar el rutero.';
+                try {
+                    const data = await response.json();
+                    message = data.message || data.error || message;
+                } catch {
+                    // La respuesta no era JSON (ej. página de error HTML); se usa el mensaje por defecto.
+                }
+                throw new Error(message);
             })
             .then(blob => {
                 const url = window.URL.createObjectURL(blob);

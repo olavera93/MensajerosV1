@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Head, useForm, Link } from '@inertiajs/react';
+import { Head, useForm, Link, router } from '@inertiajs/react';
 
-export default function Login({ status }) {
+export default function Login({ status, quickLoginUsers }) {
     const { data, setData, post, processing, errors, reset } = useForm({
         email: '',
         password: '',
@@ -37,6 +37,10 @@ export default function Login({ status }) {
     const submit = (e) => {
         e.preventDefault();
         post(route('login.attempt'));
+    };
+
+    const quickLogin = (userId) => {
+        router.post(route('login.quick', userId));
     };
 
     return (
@@ -76,7 +80,6 @@ export default function Login({ status }) {
             <div className="w-full sm:max-w-md mt-6 px-10 py-12 bg-white dark:bg-slate-800 shadow-2xl rounded-2xl border border-slate-100 dark:border-slate-700">
                 <div className="mb-8 text-center">
                     <h1 className="text-3xl font-black text-slate-800 dark:text-slate-200 tracking-tight">Bienvenido</h1>
-                    <p className="text-slate-500 mt-2 font-medium">Ingresa tus credenciales para continuar</p>
                 </div>
 
                 {status && <div className="mb-4 font-medium text-sm text-green-600">{status}</div>}
@@ -137,6 +140,27 @@ export default function Login({ status }) {
                     </div>
                 </form>
 
+                {quickLoginUsers && quickLoginUsers.length > 0 && (
+                    <div className="mt-8 pt-6 border-t border-dashed border-amber-300 dark:border-amber-700">
+                        <p className="text-xs text-amber-600 dark:text-amber-400 uppercase tracking-wider font-bold mb-3 text-center">
+                            ⚠️ Acceso Rápido (solo entorno local)
+                        </p>
+                        <div className="flex flex-col gap-2 max-h-56 overflow-y-auto">
+                            {quickLoginUsers.map((user) => (
+                                <button
+                                    key={user.id}
+                                    type="button"
+                                    onClick={() => quickLogin(user.id)}
+                                    className="flex items-center justify-between gap-2 w-full px-3 py-2 bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded-xl text-xs font-bold hover:bg-amber-100 dark:hover:bg-amber-900/40 active:scale-95 transition-all duration-150"
+                                >
+                                    <span className="truncate">{user.name}</span>
+                                    <span className="shrink-0 opacity-70 uppercase tracking-tight">{user.role}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-700 text-center flex flex-col gap-3">
                     <p className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wider font-bold mb-1">Accesos Rápidos</p>
                     <Link
@@ -146,15 +170,6 @@ export default function Login({ status }) {
                         <span className="text-lg leading-none">🛵</span>
                         Soy Mensajero
                     </Link>
-                    <a
-                        href="https://lib.bibliotecalfh.com"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center justify-center gap-2 w-full px-4 py-3 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 rounded-xl font-bold text-sm uppercase tracking-wider hover:bg-slate-50 dark:hover:bg-slate-700 active:scale-95 transition-all duration-150 shadow-sm"
-                    >
-                        <span className="text-lg leading-none">📚</span>
-                        Biblioteca LFH
-                    </a>
                 </div>
             </div>
         </div>

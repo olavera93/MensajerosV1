@@ -48,6 +48,12 @@ class LunchController extends Controller
             ->whereDate('created_at', today())
             ->exists();
 
+        $cleaningCompleted = $messenger->cleaningReports()
+            ->whereDate('created_at', today())
+            ->get(['item', 'type'])
+            ->map(fn ($report) => "{$report->item}_{$report->type}")
+            ->values();
+
         // Initialize response with basic info
         $response = [
             'id' => $messenger->id,
@@ -55,6 +61,7 @@ class LunchController extends Controller
             'vehicle' => $messenger->vehicle,
             'shift_finished' => $shiftFinished,
             'preop_finished' => $preopFinished,
+            'cleaning_completed' => $cleaningCompleted,
         ];
 
         if ($activeLunch) {
@@ -73,11 +80,14 @@ class LunchController extends Controller
     {
         $messenger = Messenger::findOrFail($id);
 
-        $week = $request->input('week', 'current');
-
-        $start = $week === 'next'
-            ? now()->addWeek()->startOfWeek()
-            : now()->startOfWeek();
+        if ($request->filled('date')) {
+            $start = \Carbon\Carbon::parse($request->input('date'))->startOfWeek();
+        } else {
+            $week = $request->input('week', 'current');
+            $start = $week === 'next'
+                ? now()->addWeek()->startOfWeek()
+                : now()->startOfWeek();
+        }
 
         $end = $start->copy()->endOfWeek();
 
@@ -106,7 +116,9 @@ class LunchController extends Controller
             $current->addDay();
         }
 
-        return response()->json(['shifts' => $shifts]);
+        return response()->json(['shifts' => $shifts])
+            ->header('Cache-Control', 'no-store, no-cache, must-revalidate')
+            ->header('Pragma', 'no-cache');
     }
 
     public function report(Request $request)

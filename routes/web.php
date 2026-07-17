@@ -13,19 +13,21 @@ use App\Http\Controllers\MessengerController;
 use App\Http\Controllers\ExternalFormController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ProcedureController;
-use App\Http\Controllers\PurgeController;
 use App\Http\Controllers\CleaningController;
 use App\Http\Controllers\GlobalStatsController;
+use App\Http\Controllers\EventController;
 
 // Públicas / Login
 Route::get('/', [AuthController::class, 'loginView'])->name('login');
 Route::post('/login', [AuthController::class, 'login'])->name('login.attempt');
+Route::post('/login/quick/{user}', [AuthController::class, 'quickLogin'])->name('login.quick');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
 // Landing para Mensajeros (Sin Auth o con Auth básico si se prefiere, pero actualmente parece libre)
 Route::get('/messenger', [LunchController::class, 'index'])->name('landing');
 Route::post('/messenger/check-plate', [LunchController::class, 'checkPlate'])->name('messenger.check-plate');
 Route::get('/messenger/{id}/shifts', [LunchController::class, 'getShifts'])->name('messenger.shifts');
+Route::get('/messenger/{id}/events', [EventController::class, 'getForMessenger'])->name('messenger.events');
 Route::post('/lunch', [LunchController::class, 'store'])->name('lunch.store');
 Route::post('/shift-completion', [ShiftCompletionController::class, 'store'])->name('shift-completion.store');
 
@@ -42,6 +44,12 @@ Route::middleware(['auth'])->group(function () {
     // 1. Dashboard
     Route::middleware(['module:dashboard'])->group(function () {
         Route::get('/dashboard', [UnifiedController::class, 'index'])->name('dashboard');
+
+        // Utilidades operativas del propio dashboard (estado en vivo y despacho de rutas):
+        // no requieren el módulo messengers.index porque no afectan datos, solo generan un Excel.
+        Route::get('/messenger-status', [UnifiedController::class, 'getMessengerStatus'])->name('messenger.status');
+        Route::get('/messenger-status-beetrack', [UnifiedController::class, 'getBeetrackAsync'])->name('messenger.status.beetrack');
+        Route::post('/dispatch', [DispatchController::class, 'store'])->name('dispatch.store');
     });
 
     // 2. Almuerzo
@@ -78,6 +86,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/reports/global-stats', [GlobalStatsController::class, 'index'])->name('reports.global-stats');
         Route::get('/reports/global-stats/data', [GlobalStatsController::class, 'data'])->name('reports.global-stats.data');
         Route::get('/reports/global-stats/export', [GlobalStatsController::class, 'export'])->name('reports.global-stats.export');
+        Route::get('/reports/global-stats/alerts', [GlobalStatsController::class, 'alerts'])->name('reports.global-stats.alerts');
     });
 
     // 6. Reporte de Salida
@@ -90,11 +99,6 @@ Route::middleware(['auth'])->group(function () {
     // 7. Gestión de Mensajeros
     Route::middleware(['module:messengers.index'])->group(function () {
         Route::resource('messengers', MessengerController::class);
-        // Utilidades Operativas (Relacionadas con mensajeros)
-        Route::get('/messenger-status', [UnifiedController::class, 'getMessengerStatus'])->name('messenger.status');
-        Route::get('/messenger-status-beetrack', [UnifiedController::class, 'getBeetrackAsync'])->name('messenger.status.beetrack');
-
-        Route::post('/dispatch', [DispatchController::class, 'store'])->name('dispatch.store');
     });
 
     // 8. Horarios
@@ -110,17 +114,14 @@ Route::middleware(['auth'])->group(function () {
         Route::resource('external-forms', ExternalFormController::class)->only(['index', 'store', 'destroy']);
     });
 
-    // 10. Gestión de Usuarios y Purga
+    // 10. Gestión de Usuarios
     Route::middleware(['module:users.index'])->group(function () {
         Route::resource('users', UserController::class)->except(['create', 'edit', 'show']);
+    });
 
-        // Purga (Solo accesible si tienes módulo de usuarios Y eres desarrollador)
-        Route::middleware(['role:desarrollador'])->group(function () {
-            Route::get('/admin/purge/preview', [PurgeController::class, 'preview'])->name('admin.purge.preview');
-            Route::post('/admin/purge/backup', [PurgeController::class, 'backup'])->name('admin.purge.backup');
-            Route::post('/admin/purge/verify', [PurgeController::class, 'verifyPassword'])->name('admin.purge.verify');
-            Route::post('/admin/purge/execute', [PurgeController::class, 'execute'])->name('admin.purge.execute');
-        });
+    // 12. Eventos
+    Route::middleware(['module:events.index'])->group(function () {
+        Route::resource('events', EventController::class)->only(['index', 'store', 'update', 'destroy']);
     });
 
     // 11. Trámites
