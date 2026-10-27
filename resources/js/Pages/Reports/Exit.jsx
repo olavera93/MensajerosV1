@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import LeaderLayout from '@/Layouts/LeaderLayout';
 import { Head } from '@inertiajs/react';
+import axios from 'axios';
 import PrimaryButton from '@/Components/PrimaryButton';
 import SuccessButton from '@/Components/SuccessButton';
 import SecondaryButton from '@/Components/SecondaryButton';
@@ -19,6 +20,7 @@ export default function Exit({ messengers, filters }) {
     const [currentPage, setCurrentPage] = useState(1);
     const [showExportModal, setShowExportModal] = useState(false);
     const [exportDates, setExportDates] = useState({ start: startDate, end: endDate });
+    const [syncing, setSyncing] = useState(false);
     const PAGE_SIZE = 10;
 
     const fetchData = useCallback(async () => {
@@ -47,6 +49,29 @@ export default function Exit({ messengers, filters }) {
         const params = new URLSearchParams({ start_date: exportDates.start, end_date: exportDates.end, messenger_id: selectedMessenger });
         window.location.href = `${route('reports.exit.export')}?${params}`;
         setShowExportModal(false);
+    };
+
+    const handleSync = async () => {
+        if (!confirm(`¿Registrar el fin de turno desde DispatchTrack del ${startDate} al ${endDate}? Se reemplazarán los registros existentes de esas fechas.`)) return;
+        setSyncing(true);
+        try {
+            const { data } = await axios.post(route('reports.exit.sync'), {
+                start_date: startDate,
+                end_date: endDate,
+                messenger_id: selectedMessenger || null,
+            });
+            let message = `Sincronización completa: ${data.created} creados, ${data.updated} actualizados, ${data.unchanged} sin cambios.`;
+            if (data.skipped.length) {
+                message += `\n\nOmitidos:\n${data.skipped.slice(0, 15).join('\n')}${data.skipped.length > 15 ? `\n(y ${data.skipped.length - 15} más)` : ''}`;
+            }
+            alert(message);
+            fetchData();
+        } catch (error) {
+            const errorData = error.response?.data;
+            alert(errorData?.error || errorData?.message || 'Error sincronizando con DispatchTrack.');
+        } finally {
+            setSyncing(false);
+        }
     };
 
     const diffLabel = (status) => {
@@ -117,6 +142,12 @@ export default function Exit({ messengers, filters }) {
                                 </button>
                             )}
                         </div>
+                        <PrimaryButton onClick={handleSync} disabled={syncing} className="flex items-center gap-2">
+                            <svg className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            {syncing ? 'SINCRONIZANDO...' : 'SINCRONIZAR DISPATCHTRACK'}
+                        </PrimaryButton>
                         <SuccessButton onClick={() => { setExportDates({ start: startDate, end: endDate }); setShowExportModal(true); }} className="flex items-center gap-2">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />

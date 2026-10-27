@@ -85,6 +85,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/reports/exit', [ShiftCompletionController::class, 'index'])->name('reports.exit');
         Route::get('/reports/exit/data', [ShiftCompletionController::class, 'getExitAnalysis'])->name('reports.exit.data');
         Route::get('/reports/exit/export', [ShiftCompletionController::class, 'export'])->name('reports.exit.export');
+        Route::post('/reports/exit/sync-dispatchtrack', [ShiftCompletionController::class, 'syncFromDispatchTrack'])->name('reports.exit.sync');
     });
 
     // 7. Gestión de Mensajeros

@@ -7,7 +7,7 @@ use App\Models\Messenger;
 
 class ShiftCompletion extends Model
 {
-    protected $fillable = ['messenger_id', 'finished_at'];
+    protected $fillable = ['messenger_id', 'finished_at', 'notes'];
 
     protected $casts = [
         'finished_at' => 'datetime',

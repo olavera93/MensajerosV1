@@ -23,6 +23,8 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withSchedule(function (\Illuminate\Console\Scheduling\Schedule $schedule) {
         $schedule->command('app:notify-lunch-ended')->everyMinute();
+        // Pasada la medianoche: cierra los turnos del día anterior con la última guía de DispatchTrack
+        $schedule->command('app:sync-shift-completions')->dailyAt('00:15')->withoutOverlapping();
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

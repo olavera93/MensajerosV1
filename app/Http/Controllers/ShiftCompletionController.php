@@ -104,6 +104,54 @@ class ShiftCompletionController extends Controller
         ]);
     }
 
+    public function syncFromDispatchTrack(Request $request, \App\Services\ShiftCompletionSyncService $sync)
+    {
+        $request->validate([
+            'start_date' => 'required|date|before_or_equal:today',
+            'end_date' => 'required|date|after_or_equal:start_date|before_or_equal:today',
+            'messenger_id' => 'nullable|exists:messengers,id',
+        ]);
+
+        $start = Carbon::parse($request->start_date);
+        $end = Carbon::parse($request->end_date);
+
+        // Cada día toma ~15-20 s contra la API: se limita el rango para no agotar el tiempo de PHP
+        if ($start->diffInDays($end) >= 7) {
+            return response()->json(['error' => 'El rango no puede superar 7 días.'], 422);
+        }
+
+        set_time_limit(300);
+
+        $totals = ['created' => 0, 'updated' => 0, 'unchanged' => 0, 'skipped' => []];
+
+        try {
+            for ($date = $start->copy(); $date->lte($end); $date->addDay()) {
+                $summary = $sync->sync($date->copy(), $request->messenger_id ? (int) $request->messenger_id : null);
+
+                $totals['created'] += $summary['created'];
+                $totals['updated'] += $summary['updated'];
+                $totals['unchanged'] += $summary['unchanged'];
+                foreach ($summary['results'] as $result) {
+                    if ($result['status'] === 'skipped') {
+                        $totals['skipped'][] = "{$summary['date']} {$result['messenger']}: {$result['detail']}";
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Error sincronizando con DispatchTrack: ' . $e->getMessage()], 502);
+        }
+
+        if ($end->isToday() && ($totals['created'] + $totals['updated']) > 0) {
+            try {
+                $this->broadcastStatus();
+            } catch (\Exception $e) {
+                \Log::warning('No se pudo notificar el dashboard: ' . $e->getMessage());
+            }
+        }
+
+        return response()->json($totals);
+    }
+
     public function export(Request $request)
     {
         $request->validate([
