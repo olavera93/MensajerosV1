@@ -9,7 +9,7 @@ import SelectInput from '@/Components/SelectInput';
 import InputLabel from '@/Components/InputLabel';
 import InputError from '@/Components/InputError';
 
-export default function UserIndex({ users }) {
+export default function UserIndex({ users, assignableRoles = [] }) {
     const [showModal, setShowModal] = useState(false);
     const [editingUser, setEditingUser] = useState(null);
     const { data: form, setData: setForm, post, put, processing, errors, clearErrors, reset } = useForm({
@@ -74,7 +74,11 @@ export default function UserIndex({ users }) {
 
     const deleteUser = (user) => {
         if (confirm(`¿Estás seguro de eliminar a ${user.name}?`)) {
-            router.delete(route('users.destroy', user.id));
+            router.delete(route('users.destroy', user.id), {
+                onSuccess: (page) => {
+                    if (page.props.flash?.error) alert(page.props.flash.error);
+                },
+            });
         }
     };
 
@@ -228,10 +232,16 @@ export default function UserIndex({ users }) {
                                     onChange={(e) => setForm('role', e.target.value)}
                                     required
                                 >
-                                    <option value="administrador">Administrador</option>
-                                    <option value="desarrollador">Desarrollador</option>
-                                    <option value="lider">Líder</option>
-                                    <option value="regente">Regente</option>
+                                    {[
+                                        ['administrador', 'Administrador'],
+                                        ['desarrollador', 'Desarrollador'],
+                                        ['lider', 'Líder'],
+                                        ['regente', 'Regente'],
+                                    ]
+                                        .filter(([value]) => assignableRoles.includes(value))
+                                        .map(([value, label]) => (
+                                            <option key={value} value={value}>{label}</option>
+                                        ))}
                                 </SelectInput>
                                 <InputError message={errors.role} className="mt-2" />
                             </div>

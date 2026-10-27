@@ -17,15 +17,16 @@ class CleaningController extends Controller
     public function store(Request $request)
     {
         Log::info("Iniciando CleaningController@store", $request->all());
-        try {
-            $request->validate([
-                'messenger_id' => 'required|exists:messengers,id',
-                'item' => 'required|in:maleta,moto',
-                'type' => 'required|in:semanal_superficial,mensual_profunda',
-                'observations' => 'nullable|string',
-            ]);
-            Log::info("Validación exitosa");
+        // Fuera del try: una ValidationException debe responder 422, no 500
+        $request->validate([
+            'messenger_id' => 'required|exists:messengers,id',
+            'item' => 'required|in:maleta,moto',
+            'type' => 'required|in:semanal_superficial,mensual_profunda',
+            'observations' => 'nullable|string',
+        ]);
+        Log::info("Validación exitosa");
 
+        try {
             $messenger = Messenger::findOrFail($request->messenger_id);
             Log::info("Mensajero encontrado: " . $messenger->name);
 

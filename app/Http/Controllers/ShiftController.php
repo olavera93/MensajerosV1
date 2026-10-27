@@ -83,9 +83,21 @@ class ShiftController extends Controller
         ]);
 
         try {
-            Excel::import(new ShiftsImport, $request->file('file'));
+            $import = new ShiftsImport;
+            Excel::import($import, $request->file('file'));
             $this->broadcastStatus();
-            return redirect()->back()->with('success', 'Horarios importados correctamente.');
+
+            if (!empty($import->skipped)) {
+                $details = collect($import->skipped)
+                    ->take(10)
+                    ->map(fn($reason, $rowNumber) => "Fila {$rowNumber}: {$reason}")
+                    ->implode('; ');
+                $more = count($import->skipped) > 10 ? ' (y ' . (count($import->skipped) - 10) . ' más)' : '';
+
+                return redirect()->back()->with('error', "Se importaron {$import->imported} turno(s) y se omitieron " . count($import->skipped) . " fila(s). {$details}{$more}");
+            }
+
+            return redirect()->back()->with('success', "{$import->imported} turno(s) importado(s) correctamente.");
         } catch (\Exception $e) {
             return redirect()->back()->withErrors(['file' => 'Error al importar: ' . $e->getMessage()]);
         }

@@ -10,6 +10,24 @@ use Inertia\Inertia;
 
 class UserController extends Controller
 {
+    /**
+     * Roles que el usuario autenticado puede asignar o administrar.
+     * Evita que un rol inferior se otorgue (o otorgue) privilegios superiores.
+     */
+    private function assignableRoles(): array
+    {
+        return match (auth()->user()->role) {
+            'desarrollador' => ['administrador', 'desarrollador', 'lider', 'regente'],
+            'administrador' => ['administrador', 'lider', 'regente'],
+            default => ['lider', 'regente'],
+        };
+    }
+
+    private function canManage(User $user): bool
+    {
+        return in_array($user->role, $this->assignableRoles());
+    }
+
     public function index()
     {
         return Inertia::render('Users/Index', [
@@ -22,6 +40,7 @@ class UserController extends Controller
                     'modules' => $user->modules ?: [],
                 ];
             }),
+            'assignableRoles' => $this->assignableRoles(),
         ]);
     }
 
@@ -31,7 +50,7 @@ class UserController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
             'password' => 'required|string|min:6',
-            'role' => ['required', Rule::in(['administrador', 'desarrollador', 'lider', 'regente'])],
+            'role' => ['required', Rule::in($this->assignableRoles())],
             'modules' => 'nullable|array',
         ]);
 
@@ -48,11 +67,15 @@ class UserController extends Controller
 
     public function update(Request $request, User $user)
     {
+        if (!$this->canManage($user)) {
+            return redirect()->back()->withErrors(['role' => 'No tienes permiso para modificar este usuario.']);
+        }
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users')->ignore($user->id)],
             'password' => 'nullable|string|min:6',
-            'role' => ['required', Rule::in(['administrador', 'desarrollador', 'lider', 'regente'])],
+            'role' => ['required', Rule::in($this->assignableRoles())],
             'modules' => 'nullable|array',
         ]);
 
@@ -76,6 +99,10 @@ class UserController extends Controller
     {
         if ($user->id === auth()->id()) {
             return redirect()->back()->with('error', 'No puedes eliminarte a ti mismo.');
+        }
+
+        if (!$this->canManage($user)) {
+            return redirect()->back()->with('error', 'No tienes permiso para eliminar este usuario.');
         }
 
         $user->delete();

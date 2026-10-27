@@ -133,8 +133,8 @@ export default function ShiftsIndex({ auth, messengers, weekStart, weekEnd }) {
 
         router.post(route('shifts.import'), formData, {
             forceFormData: true,
-            onSuccess: () => {
-                alert('Horarios importados correctamente');
+            onSuccess: (page) => {
+                alert(page.props.flash?.error || page.props.flash?.success || 'Horarios importados correctamente');
                 e.target.value = ''; // Reset input
             },
             onError: (errors) => {
