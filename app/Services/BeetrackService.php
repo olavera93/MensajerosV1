@@ -21,20 +21,8 @@ class BeetrackService
         Log::info('BeetrackService: Starting getDispatchStatus');
 
         return \Illuminate\Support\Facades\Cache::remember('beetrack_status_v4', 60, function () {
-            $today = now()->format('d-m-Y');
-            Log::info("BeetrackService: Fetching for date: {$today} (Fresh Cache)");
-
             try {
-                $response = Http::timeout(20)->withHeaders([
-                    'X-AUTH-TOKEN' => $this->apiKey,
-                ])->get($this->baseUrl, ['date' => $today]);
-
-                if (!$response->successful()) {
-                    Log::error("Beetrack API Error: " . $response->body());
-                    return ['status' => 'error', 'message' => 'API Error'];
-                }
-
-                $rutasRaw = $response->json()['response']['routes'] ?? [];
+                $rutasRaw = $this->getTodayRoutes();
                 Log::info('Beetrack Raw Routes Count: ' . count($rutasRaw));
 
                 $activeRoutes = [];
@@ -120,6 +108,28 @@ class BeetrackService
                 Log::error("Beetrack Service Exception: " . $e->getMessage());
                 return ['status' => 'error', 'message' => $e->getMessage()];
             }
+        });
+    }
+
+    /**
+     * Rutas del día con sus guías. Se comparte en caché entre el estado del dashboard y las alertas.
+     */
+    public function getTodayRoutes(): array
+    {
+        return \Illuminate\Support\Facades\Cache::remember('beetrack_routes_' . now()->toDateString(), 60, function () {
+            $today = now()->format('d-m-Y');
+            Log::info("BeetrackService: Fetching routes for date: {$today} (Fresh Cache)");
+
+            $response = Http::timeout(20)->withHeaders([
+                'X-AUTH-TOKEN' => $this->apiKey,
+            ])->get($this->baseUrl, ['date' => $today]);
+
+            if (!$response->successful()) {
+                Log::error("Beetrack API Error: " . $response->body());
+                throw new \RuntimeException('DispatchTrack respondió con error ' . $response->status());
+            }
+
+            return $response->json()['response']['routes'] ?? [];
         });
     }
 
@@ -249,6 +259,7 @@ class BeetrackService
     public function clearCache()
     {
         \Illuminate\Support\Facades\Cache::forget('beetrack_status_v4');
+        \Illuminate\Support\Facades\Cache::forget('beetrack_routes_' . now()->toDateString());
         \Illuminate\Support\Facades\Log::info('BeetrackService: Cache cleared manually');
     }
 

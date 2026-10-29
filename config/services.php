@@ -38,6 +38,12 @@ return [
     'beetrack' => [
         'api_key' => env('BEETRACK_API_KEY'),
         'url' => env('BEETRACK_URL', 'https://farmaciahom.dispatchtrack.com/api/external/v1/routes'),
+        // Minutos sin actividad para las alertas del dashboard
+        'alerts' => [
+            'idle_minutes' => (int) env('ALERT_IDLE_MINUTES', 45),
+            'first_guide_minutes' => (int) env('ALERT_FIRST_GUIDE_MINUTES', 60),
+            'return_minutes' => (int) env('ALERT_RETURN_MINUTES', 45),
+        ],
     ],
 
 ];

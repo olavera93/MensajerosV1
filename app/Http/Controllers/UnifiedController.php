@@ -39,12 +39,27 @@ class UnifiedController extends Controller
         ]);
     }
 
-    public function getBeetrackAsync()
+    public function getBeetrackAsync(\App\Services\LiveAlertService $alertService)
     {
         $beetrackData = $this->statusService->getBeetrackStatus();
 
+        try {
+            $alerts = $alertService->alerts();
+            $availableSince = $alertService->availableSince();
+            $routeActivity = $alertService->routeActivity();
+        } catch (\Exception $e) {
+            \Log::warning('No se pudieron calcular las alertas: ' . $e->getMessage());
+            $alerts = [];
+            $availableSince = [];
+            $routeActivity = [];
+        }
+
         return response()->json([
             'beetrack_data' => $beetrackData,
+            'alerts' => $alerts,
+            'alert_limits' => config('services.beetrack.alerts'),
+            'available_since' => (object) $availableSince,
+            'route_activity' => (object) $routeActivity,
             'timestamp' => now()->toDateTimeString()
         ]);
     }

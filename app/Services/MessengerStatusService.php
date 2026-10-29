@@ -103,6 +103,11 @@ class MessengerStatusService
         }
 
         $shift_info = 'Sin Turno';
+        $shiftStart = $shiftEnd = null;
+        if ($shift && $shift->start_time && $shift->end_time) {
+            $shiftStart = \Carbon\Carbon::parse($shift->date)->setTimeFromTimeString($shift->start_time)->toIso8601String();
+            $shiftEnd = \Carbon\Carbon::parse($shift->date)->setTimeFromTimeString($shift->end_time)->toIso8601String();
+        }
         if ($shift) {
             $start = \Carbon\Carbon::parse($shift->start_time)->format('h:i A');
             $end = \Carbon\Carbon::parse($shift->end_time)->format('h:i A');
@@ -130,6 +135,11 @@ class MessengerStatusService
             'lunch_range' => $range,
             'shift_info' => $shift_info,
             'finished_info' => $finished,
+            'in_dispatchtrack' => !empty($m->beetrack_id),
+            'shift_start' => $shiftStart,
+            'shift_end' => $shiftEnd,
+            'lunch_start' => $log ? $log->start_time->toIso8601String() : null,
+            'lunch_end' => $log ? $log->end_time->toIso8601String() : null,
             'beetrack_info' => null, // Placeholder for async load
             'priority' => $priority,
             'lat' => null,
