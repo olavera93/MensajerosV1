@@ -30,20 +30,42 @@ export default function Dashboard({ messengers, dispatch_locations, beetrack_dat
     const [filter, setFilter] = useState('');
     const [notificationsHistory, setNotificationsHistory] = useState([]);
     const [showHistory, setShowHistory] = useState(false);
-    const [activeFilters, setActiveFilters] = useState(new Set());
-
-    const toggleFilter = (key) => {
-        setActiveFilters(prev => {
-            const next = new Set(prev);
-            if (next.has(key)) next.delete(key);
-            else next.add(key);
-            return next;
-        });
-    };
+    const [sede, setSede] = useState('all');
+    const [stateFilter, setStateFilter] = useState(null);
+    const [showAllRoute, setShowAllRoute] = useState(false);
     const [localMessengers, setLocalMessengers] = useState(messengers);
-    const [lastUpdated, setLastUpdated] = useState(new Date().toLocaleTimeString());
+    const [lastUpdated, setLastUpdated] = useState(new Date());
     const [beetrackLoading, setBeetrackLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [alerts, setAlerts] = useState([]);
+    const [alertLimits, setAlertLimits] = useState(null);
+    const [availableSince, setAvailableSince] = useState({});
+    const [routeActivity, setRouteActivity] = useState({});
+    const [refreshing, setRefreshing] = useState(false);
+    const pollRef = useRef(null);
+
+    // Reloj para los tiempos en vivo (sin ruta, almuerzo, última actualización)
+    const [now, setNow] = useState(Date.now());
+    useEffect(() => {
+        const tick = setInterval(() => setNow(Date.now()), 5000);
+        return () => clearInterval(tick);
+    }, []);
+    const seenAlertsRef = useRef(null);
+
+    // Avisa solo las alertas nuevas; en la primera carga se muestran sin notificar
+    const updateAlerts = (list = []) => {
+        const keys = new Set(list.map(a => `${a.type}-${a.messenger_id}`));
+        if (seenAlertsRef.current) {
+            list.filter(a => !seenAlertsRef.current.has(`${a.type}-${a.messenger_id}`)).forEach(a => {
+                const icon = a.type === 'idle' ? '⏸️' : '🏠';
+                const description = alertText(a);
+                setNotificationsHistory(prev => [{ id: Date.now() + a.messenger_id, title: a.name, description, icon, time: new Date().toLocaleTimeString() }, ...prev].slice(0, 50));
+                toast.warning(`${icon} ${a.name}`, { description });
+            });
+        }
+        seenAlertsRef.current = keys;
+        setAlerts(list);
+    };
 
     // --- Fast/Async Data Loading ---
     useEffect(() => {
@@ -104,8 +126,12 @@ export default function Dashboard({ messengers, dispatch_locations, beetrack_dat
 
                     setLocalMessengers(currentMessengers);
                 }
+                updateAlerts(data.alerts);
+                setAlertLimits(data.alert_limits);
+                setAvailableSince(data.available_since || {});
+                setRouteActivity(data.route_activity || {});
                 setBeetrackLoading(false);
-                setLastUpdated(new Date().toLocaleTimeString());
+                setLastUpdated(new Date());
             })
             .catch(err => {
                 console.error('Error fetching Beetrack status:', err);
@@ -163,11 +189,21 @@ export default function Dashboard({ messengers, dispatch_locations, beetrack_dat
                 if (btData) merged = mergeBeetrack(merged, btData);
                 detectAndNotify(merged);
                 setLocalMessengers(merged);
-                setLastUpdated(new Date().toLocaleTimeString());
+                updateAlerts(btResponse.alerts);
+                setAlertLimits(btResponse.alert_limits);
+                setAvailableSince(btResponse.available_since || {});
+                setRouteActivity(btResponse.route_activity || {});
+                setLastUpdated(new Date());
                 setBeetrackLoading(false);
-            }).catch(err => console.error('Polling error:', err));
+                setRefreshing(false);
+                setNow(Date.now());
+            }).catch(err => {
+                console.error('Polling error:', err);
+                setRefreshing(false);
+            });
         };
 
+        pollRef.current = poll;
         const interval = setInterval(poll, 30000);
         return () => clearInterval(interval);
     }, []);
@@ -216,52 +252,9 @@ export default function Dashboard({ messengers, dispatch_locations, beetrack_dat
             .catch(err => alert('Error: ' + err.message));
     };
 
-    // --- Drag and Drop Logic ---
-
-
-    // --- Filtering & Sorting ---
-    const getFilteredMessengers = () => {
-        const locationOf = (m) => m.location === 'principal' ? '116' : (m.location || '').toLowerCase();
-        const statusOf = (m) => (m.status || '').toLowerCase();
-
-        // Group chips by category
-        const locationKeys = new Set(['116', 'teusaquillo']);
-        const statusKeys = new Set(['en-ruta', 'disponible', 'almuerzo', 'finalizado']);
-
-        const activeLocationFilters = [...activeFilters].filter(k => locationKeys.has(k));
-        const activeStatusFilters = [...activeFilters].filter(k => statusKeys.has(k));
-
-        const chipMatchers = {
-            '116': (m) => locationOf(m) === '116',
-            'teusaquillo': (m) => locationOf(m) === 'teusaquillo',
-            'en-ruta': (m) => statusOf(m) === 'en ruta',
-            'disponible': (m) => statusOf(m) === 'disponible',
-            'almuerzo': (m) => statusOf(m).includes('almuerzo'),
-            'finalizado': (m) => statusOf(m) === 'finalizado',
-        };
-
-        return localMessengers
-            .filter(m => {
-                // 1. Text search
-                const search = filter.toUpperCase();
-                const textMatch = !filter ||
-                    m.name.toUpperCase().includes(search) ||
-                    m.vehicle.toUpperCase().includes(search) ||
-                    statusOf(m).toUpperCase().includes(search) ||
-                    locationOf(m).toUpperCase().includes(search);
-
-                // 2. Faceted: OR within each category, AND between categories
-                const locationMatch = activeLocationFilters.length === 0 ||
-                    activeLocationFilters.some(k => chipMatchers[k]?.(m));
-                const statusMatch = activeStatusFilters.length === 0 ||
-                    activeStatusFilters.some(k => chipMatchers[k]?.(m));
-
-                return textMatch && locationMatch && statusMatch;
-            })
-            .sort((a, b) => {
-                if (a.priority !== b.priority) return a.priority - b.priority;
-                return a.name.localeCompare(b.name);
-            });
+    const refreshNow = () => {
+        setRefreshing(true);
+        pollRef.current?.();
     };
 
     const selectMessenger = (m) => {
@@ -277,116 +270,141 @@ export default function Dashboard({ messengers, dispatch_locations, beetrack_dat
         setIsModalOpen(true);
     };
 
+    // --- Agrupación por estado ---
+    const alertsById = Object.fromEntries(alerts.map(a => [a.messenger_id, a]));
+    const groupOf = (m) => {
+        if (m.finished_info) return 'finalizados';
+        if (m.status === 'En Ruta') return 'ruta';
+        if (m.status === 'En Almuerzo') return 'almuerzo';
+        if (m.shift_start && new Date(m.shift_start).getTime() > now) return 'por-iniciar';
+        return 'disponibles';
+    };
+
+    const search = filter.trim().toUpperCase();
+    const visible = localMessengers.filter(m =>
+        (sede === 'all' || m.location === sede) &&
+        (!search || m.name.toUpperCase().includes(search) || String(m.vehicle || '').toUpperCase().includes(search))
+    );
+
+    const groups = { disponibles: [], ruta: [], almuerzo: [], 'por-iniciar': [], finalizados: [] };
+    visible.forEach(m => groups[groupOf(m)].push(m));
+
+    // Disponibles: quien lleva más tiempo sin ruta primero; el personal de apoyo al final
+    const idleMs = (m) => availableSince[m.id] ? now - new Date(availableSince[m.id].since).getTime() : -1;
+    const byName = (a, b) => a.name.localeCompare(b.name);
+    groups.disponibles.sort((a, b) => (b.in_dispatchtrack - a.in_dispatchtrack) || (idleMs(b) - idleMs(a)) || byName(a, b));
+    groups.ruta.sort((a, b) => ((alertsById[b.id]?.minutes ?? -1) - (alertsById[a.id]?.minutes ?? -1)) || byName(a, b));
+    groups.almuerzo.sort((a, b) => new Date(a.lunch_end) - new Date(b.lunch_end));
+    groups['por-iniciar'].sort((a, b) => new Date(a.shift_start) - new Date(b.shift_start));
+    groups.finalizados.sort(byName);
+
+    const alerted = visible.filter(m => alertsById[m.id]);
+    const nextId = groups.disponibles.find(m => m.in_dispatchtrack && availableSince[m.id])?.id;
+    const updatedAgo = Math.max(0, Math.round((now - lastUpdated.getTime()) / 1000));
+    const toggleState = (key) => setStateFilter(prev => prev === key ? null : key);
+
+    const cardProps = (m) => ({
+        m,
+        now,
+        isSelected: data.messenger_id === m.id,
+        onSelect: () => selectMessenger(m),
+        onAssign: () => openAssignModal(m),
+    });
+    const renderCard = (m, group) => {
+        if (group === 'disponibles') return <AvailableCard key={m.id} {...cardProps(m)} idle={availableSince[m.id]} next={m.id === nextId} />;
+        if (group === 'ruta') return <RouteCard key={m.id} {...cardProps(m)} alert={alertsById[m.id]} activity={routeActivity[m.id]} />;
+        if (group === 'almuerzo') return <LunchCard key={m.id} {...cardProps(m)} />;
+        return <CompactCard key={m.id} {...cardProps(m)} group={group} />;
+    };
+
+    const routeLimit = 8;
+    const routeShown = showAllRoute ? groups.ruta : groups.ruta.slice(0, routeLimit);
+
     return (
         <LeaderLayout title="Control Center">
             <Head title="Control Center" />
 
-            {/* Sticky Header with Filters and Stats */}
-            <div className="sticky top-16 z-[1000] backdrop-blur-xl bg-white/70 dark:bg-slate-900/70 border-b border-indigo-100 dark:border-indigo-900/50 shadow-sm transition-all duration-300">
-                <div className="max-w-[1800px] mx-auto p-3 sm:p-4">
-                    <div className="flex flex-col xl:flex-row items-start xl:items-center gap-4 w-full">
-                        {/* Search and Filters */}
-                        <div className="flex-1 w-full flex flex-col md:flex-row gap-3 items-start md:items-center">
-                            <div className="relative w-full lg:max-w-md group shrink-0">
-                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none z-10">
-                                    <svg className="h-4 w-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                                </div>
-                                <TextInput
-                                    type="text"
-                                    value={filter}
-                                    onChange={(e) => setFilter(e.target.value)}
-                                    placeholder="Buscar..."
-                                    className="pl-10 w-full"
-                                />
-                                {filter && (
-                                    <button
-                                        onClick={() => setFilter('')}
-                                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-                                    >
-                                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                                    </button>
-                                )}
-                            </div>
+            {/* Encabezado: búsqueda, sede, actualización y contadores que filtran */}
+            <div className="sm:sticky sm:top-16 relative z-[1000] backdrop-blur-xl bg-white/85 dark:bg-slate-900/85 border-b border-slate-200 dark:border-slate-800 shadow-sm">
+                <div className="max-w-[1800px] mx-auto px-3 sm:px-6 py-3 sm:py-4 flex flex-col gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
+                        <label htmlFor="dashboard-search" className="relative flex-1 min-w-[220px] max-w-md">
+                            <span className="sr-only">Buscar mensajero o placa</span>
+                            <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+                            <TextInput
+                                id="dashboard-search"
+                                type="search"
+                                value={filter}
+                                onChange={(e) => setFilter(e.target.value)}
+                                placeholder="Buscar mensajero o placa"
+                                className="pl-10 w-full h-10"
+                            />
+                        </label>
 
-                            {/* Chips */}
-                            <div className="flex flex-wrap items-center gap-1.5 overflow-x-auto no-scrollbar pb-1 md:pb-0">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-1 hidden lg:block shrink-0">Sede:</span>
-                                <FilterBadge active={activeFilters.has('116')} onClick={() => toggleFilter('116')} label="Sede 116" color="blue" />
-                                <FilterBadge active={activeFilters.has('teusaquillo')} onClick={() => toggleFilter('teusaquillo')} label="Teusaquillo" color="teal" />
-
-                                <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 hidden sm:block"></div>
-
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-1 hidden lg:block shrink-0">Estado:</span>
-                                <FilterBadge active={activeFilters.has('en-ruta')} onClick={() => toggleFilter('en-ruta')} label="En Ruta" color="red" />
-                                <FilterBadge active={activeFilters.has('disponible')} onClick={() => toggleFilter('disponible')} label="Disponible" color="emerald" />
-                                <FilterBadge active={activeFilters.has('almuerzo')} onClick={() => toggleFilter('almuerzo')} label="Almuerzo" color="amber" />
-                                <FilterBadge active={activeFilters.has('finalizado')} onClick={() => toggleFilter('finalizado')} label="Finalizado" color="violet" />
-
-                                {activeFilters.size > 0 && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setActiveFilters(new Set())}
-                                        className="ml-2 px-2 py-1 rounded-full text-[10px] font-bold border border-dashed border-slate-300 dark:border-slate-600 text-slate-400 hover:text-red-500 hover:border-red-300 dark:hover:border-red-700 cursor-pointer transition-all duration-200 flex items-center gap-1"
-                                    >
-                                        Limpiar
-                                    </button>
-                                )}
-                            </div>
+                        <div role="group" aria-label="Sede" className="inline-flex p-0.5 gap-0.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                            {[['all', 'Todas'], ['principal', 'Sede 116'], ['teusaquillo', 'Teusaquillo']].map(([key, label]) => (
+                                <button
+                                    key={key}
+                                    type="button"
+                                    aria-pressed={sede === key}
+                                    onClick={() => setSede(key)}
+                                    className={`h-9 px-3 sm:px-4 rounded-lg text-sm transition-colors ${sede === key
+                                        ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white font-bold shadow-sm'
+                                        : 'text-slate-600 dark:text-slate-300 font-semibold hover:text-slate-900 dark:hover:text-white'}`}
+                                >
+                                    {label}
+                                </button>
+                            ))}
                         </div>
 
-                        {/* Stats and Notifications */}
-                        <div className="flex items-center gap-4 w-full xl:w-auto justify-between xl:justify-end border-t xl:border-t-0 pt-3 xl:pt-0 border-slate-100 dark:border-slate-800">
-                            <div className="flex gap-2">
-                                <div className="px-3 py-1.5 bg-white/50 dark:bg-slate-800/50 rounded-lg border border-slate-100 dark:border-slate-700">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase mr-2">Total:</span>
-                                    <span className="text-sm font-black">{localMessengers.length}</span>
-                                </div>
-                                <div className="px-3 py-1.5 bg-white/50 dark:bg-slate-800/50 rounded-lg border border-slate-100 dark:border-slate-700 border-l-2 border-l-red-500">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase mr-2">Ruta:</span>
-                                    <span className="text-sm font-black">{localMessengers.filter(m => m.status === 'En Ruta').length}</span>
-                                </div>
-                            </div>
+                        <div className="flex items-center gap-2 ml-auto">
+                            <span className="hidden sm:flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap">
+                                <span className={`w-2 h-2 rounded-full ${beetrackLoading ? 'bg-slate-400 animate-pulse' : 'bg-emerald-500'}`} />
+                                {beetrackLoading ? 'Consultando DispatchTrack…' : `Actualizado hace ${updatedAgo < 60 ? `${updatedAgo} s` : `${Math.floor(updatedAgo / 60)} min`}`}
+                            </span>
+                            <button
+                                type="button"
+                                onClick={refreshNow}
+                                aria-label="Actualizar ahora"
+                                className="h-10 w-10 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center hover:bg-slate-50 dark:hover:bg-slate-700"
+                            >
+                                <svg className={`w-[18px] h-[18px] ${refreshing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8" /><path d="M21 3v5h-5" /></svg>
+                            </button>
 
-                            {/* Notifications Bell */}
                             <div className="relative">
                                 <button
+                                    type="button"
                                     onClick={() => setShowHistory(!showHistory)}
-                                    className="p-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-all relative border border-indigo-100 dark:border-indigo-800"
+                                    aria-label="Notificaciones"
+                                    className="h-10 w-10 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center hover:bg-slate-50 dark:hover:bg-slate-700 relative"
                                 >
-                                    <span className="text-xl">🔔</span>
+                                    <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /></svg>
                                     {notificationsHistory.length > 0 && (
-                                        <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-black shadow-lg border-2 border-white dark:border-slate-900">
+                                        <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] min-w-5 h-5 px-1 rounded-full flex items-center justify-center font-black border-2 border-white dark:border-slate-900">
                                             {notificationsHistory.length}
                                         </span>
                                     )}
                                 </button>
 
                                 {showHistory && (
-                                    <div className="absolute right-0 mt-3 w-[calc(100vw-1.5rem)] sm:w-96 max-w-sm bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 z-[1100] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                                    <div className="absolute right-0 mt-3 w-[calc(100vw-1.5rem)] sm:w-96 max-w-sm bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 z-[1100] overflow-hidden">
                                         <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
                                             <h3 className="font-black text-sm uppercase tracking-wider">Notificaciones</h3>
-                                            <button onClick={() => setNotificationsHistory([])} className="text-[10px] font-bold text-indigo-500 hover:text-indigo-600 uppercase tracking-widest">Limpiar</button>
+                                            <button onClick={() => setNotificationsHistory([])} className="text-xs font-bold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400">Limpiar</button>
                                         </div>
                                         <div className="max-h-[400px] overflow-y-auto custom-scrollbar">
                                             {notificationsHistory.length === 0 ? (
-                                                <div className="p-12 text-center text-slate-400">
-                                                    <p className="text-2xl mb-2">📭</p>
-                                                    <p className="text-xs font-medium italic">Sin actividad</p>
-                                                </div>
+                                                <p className="p-10 text-center text-sm text-slate-500">Sin actividad reciente</p>
                                             ) : (
                                                 notificationsHistory.map(note => (
-                                                    <div key={note.id} className="p-4 border-b border-slate-50 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors group">
-                                                        <div className="flex gap-4">
-                                                            <div className="shrink-0 w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-xl shadow-inner group-hover:scale-110 transition-transform">
-                                                                {note.icon}
+                                                    <div key={note.id} className="p-4 border-b border-slate-100 dark:border-slate-700/50 flex gap-3">
+                                                        <div className="shrink-0 w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-lg">{note.icon}</div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="flex justify-between items-start gap-2">
+                                                                <p className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">{note.title}</p>
+                                                                <span className="text-[11px] text-slate-500 shrink-0">{note.time}</span>
                                                             </div>
-                                                            <div className="flex-1 min-w-0">
-                                                                <div className="flex justify-between items-start mb-0.5">
-                                                                    <p className="text-sm font-black text-slate-800 dark:text-slate-100 truncate">{note.title}</p>
-                                                                    <span className="text-[9px] font-bold text-slate-400 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded uppercase tracking-tighter shrink-0">{note.time}</span>
-                                                                </div>
-                                                                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed font-medium">{note.description}</p>
-                                                            </div>
+                                                            <p className="text-xs text-slate-600 dark:text-slate-400">{note.description}</p>
                                                         </div>
                                                     </div>
                                                 ))
@@ -397,33 +415,88 @@ export default function Dashboard({ messengers, dispatch_locations, beetrack_dat
                             </div>
                         </div>
                     </div>
+
+                    <div role="group" aria-label="Filtrar por estado" className="flex gap-2 overflow-x-auto no-scrollbar pb-0.5">
+                        {alerted.length > 0 ? (
+                            <CounterPill
+                                active={stateFilter === 'alertas'}
+                                onClick={() => toggleState('alertas')}
+                                tone="alert"
+                                label="Alertas"
+                                count={alerted.length}
+                            />
+                        ) : (
+                            <span className="shrink-0 h-10 px-3.5 rounded-full border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-800 dark:text-emerald-300 text-sm font-bold flex items-center gap-1.5">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
+                                Sin alertas
+                            </span>
+                        )}
+                        {STATES.map(s => (
+                            <CounterPill
+                                key={s.key}
+                                active={stateFilter === s.key}
+                                onClick={() => toggleState(s.key)}
+                                dot={s.dot}
+                                label={s.label}
+                                count={groups[s.key].length}
+                            />
+                        ))}
+                    </div>
+
+                    {alertLimits && (
+                        <p className="hidden sm:block text-xs text-slate-500 dark:text-slate-400 -mt-1">
+                            Alertas: {alertLimits.idle_minutes} min en ruta sin gestionar guías ({alertLimits.first_guide_minutes} min para la primera) · {alertLimits.return_minutes} min desde la última entrega sin marcar el retorno a la sede.
+                        </p>
+                    )}
                 </div>
             </div>
 
+            <div className="max-w-[1800px] mx-auto px-3 sm:px-6 py-5">
+                {stateFilter ? (
+                    <Section
+                        title={stateFilter === 'alertas' ? 'Con alerta' : STATES.find(s => s.key === stateFilter).label}
+                        dot={stateFilter === 'alertas' ? 'bg-amber-500' : STATES.find(s => s.key === stateFilter).dot}
+                        count={(stateFilter === 'alertas' ? alerted : groups[stateFilter]).length}
+                        action={<button type="button" onClick={() => setStateFilter(null)} className="text-sm font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">Ver todos los estados</button>}
+                    >
+                        <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(300px,1fr))]">
+                            {(stateFilter === 'alertas' ? alerted : groups[stateFilter]).map(m => renderCard(m, stateFilter === 'alertas' ? groupOf(m) : stateFilter))}
+                        </div>
+                        {(stateFilter === 'alertas' ? alerted : groups[stateFilter]).length === 0 && <EmptyNote>No hay mensajeros en este estado.</EmptyNote>}
+                    </Section>
+                ) : (
+                    <div className="flex flex-col gap-5">
+                        <div className="grid gap-5 grid-cols-[repeat(auto-fit,minmax(300px,1fr))] items-start">
+                            <Section title="Disponibles" dot="bg-emerald-500" count={groups.disponibles.length} hint="Más tiempo sin ruta primero">
+                                {groups.disponibles.map(m => renderCard(m, 'disponibles'))}
+                                {groups.disponibles.length === 0 && <EmptyNote>Nadie disponible en este momento.</EmptyNote>}
+                            </Section>
 
-            {/* Main Content */}
-            <div className="max-w-[1800px] mx-auto p-3 sm:p-4">
-                {beetrackLoading && (
-                    <div className="flex justify-center mb-4">
-                        <span className="text-[10px] animate-pulse text-indigo-500 font-bold tracking-widest uppercase">
-                            Consultando rutas en Beetrack...
-                        </span>
+                            <Section title="En ruta" dot="bg-red-500" count={groups.ruta.length} hint="Con alerta primero">
+                                {routeShown.map(m => renderCard(m, 'ruta'))}
+                                {groups.ruta.length === 0 && <EmptyNote>Nadie en ruta.</EmptyNote>}
+                                {groups.ruta.length > routeLimit && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowAllRoute(v => !v)}
+                                        className="h-11 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
+                                    >
+                                        {showAllRoute ? 'Ver menos' : `Ver ${groups.ruta.length - routeLimit} más en ruta`}
+                                    </button>
+                                )}
+                            </Section>
+
+                            <Section title="En almuerzo" dot="bg-amber-500" count={groups.almuerzo.length} hint="Próximo en volver primero">
+                                {groups.almuerzo.map(m => renderCard(m, 'almuerzo'))}
+                                {groups.almuerzo.length === 0 && <EmptyNote>Nadie en almuerzo.</EmptyNote>}
+                            </Section>
+                        </div>
+
+                        <CollapsedGroup title="Por iniciar turno" items={groups['por-iniciar']} render={m => `${m.name} · ${fmtTime(m.shift_start)}`} />
+                        <CollapsedGroup title="Finalizados" items={groups.finalizados} tone="violet" render={m => `${m.name} · cerró ${m.finished_info?.hora_cierre ?? ''}`} />
                     </div>
                 )}
-
-                <div className="flex flex-col gap-2">
-                    {getFilteredMessengers().map(m => (
-                        <MessengerCard
-                            key={m.id}
-                            m={m}
-                            onSelect={() => selectMessenger(m)}
-                            onAssign={() => openAssignModal(m)}
-                            isSelected={data.messenger_id === m.id}
-                        />
-                    ))}
-                </div>
             </div>
-
             {/* Dispatch Modal */}
             <Modal show={isModalOpen} onClose={() => setIsModalOpen(false)}>
                 <form onSubmit={handleDispatchSubmit} className="p-6">
@@ -490,190 +563,279 @@ export default function Dashboard({ messengers, dispatch_locations, beetrack_dat
     );
 }
 
-function MessengerCard({ m, onSelect, onAssign, isSelected }) {
-    const config = {
-        'status-en-ruta': { color: 'red', avatar: 'bg-red-500', rowBg: 'bg-red-50/60 dark:bg-red-900/10', border: 'border-l-4 border-l-red-500' },
-        'status-almuerzo': { color: 'amber', avatar: 'bg-amber-400', rowBg: 'bg-amber-50/60 dark:bg-amber-900/10', border: 'border-l-4 border-l-amber-400' },
-        'status-libre': { color: 'emerald', avatar: 'bg-emerald-500', rowBg: 'bg-white dark:bg-slate-800', border: 'border-l-4 border-l-emerald-500' },
-        'pendiente': { color: 'slate', avatar: 'bg-slate-400', rowBg: 'bg-slate-50/80 dark:bg-slate-800', border: 'border-l-4 border-l-slate-300' },
-    }[m.class_name] || { color: 'slate', avatar: 'bg-slate-400', rowBg: 'bg-white dark:bg-slate-800', border: 'border-l-4 border-gray-200' };
+const STATES = [
+    { key: 'disponibles', label: 'Disponibles', dot: 'bg-emerald-500' },
+    { key: 'ruta', label: 'En ruta', dot: 'bg-red-500' },
+    { key: 'almuerzo', label: 'Almuerzo', dot: 'bg-amber-500' },
+    { key: 'por-iniciar', label: 'Por iniciar', dot: 'bg-slate-400' },
+    { key: 'finalizados', label: 'Finalizados', dot: 'bg-violet-500' },
+];
 
-    const initials = m.name.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase();
+const SEDE_LABEL = { principal: 'Sede 116', teusaquillo: 'Teusaquillo' };
+const IDLE_REASON = { route: 'fin de ruta', lunch: 'fin de almuerzo', shift: 'inicio de turno' };
+
+const fmtTime = (iso) => iso ? new Date(iso).toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit' }) : '';
+
+// Duración legible: "12 min" o "1 h 05 min"
+function fmtDuration(ms) {
+    const mins = Math.max(0, Math.floor(ms / 60000));
+    return mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)} h ${String(mins % 60).padStart(2, '0')} min`;
+}
+
+function alertText(a) {
+    if (a.type === 'return') {
+        return `Terminó sus entregas a las ${a.since} y no ha marcado el retorno a ${SEDE_LABEL[a.return_to] || a.return_to}`;
+    }
+    return a.first_guide
+        ? `Inició la ruta a las ${a.since} y no ha gestionado ninguna guía`
+        : `Sin gestionar guías desde las ${a.since}`;
+}
+
+function CounterPill({ active, onClick, label, count, dot, tone }) {
+    const alert = tone === 'alert';
+    const base = 'shrink-0 h-10 px-3.5 rounded-full border text-sm flex items-center gap-2 transition-colors';
+    const look = active
+        ? (alert ? 'bg-amber-500 border-amber-500 text-white font-bold' : 'bg-indigo-600 border-indigo-600 text-white font-bold')
+        : (alert
+            ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 font-bold hover:bg-amber-100'
+            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-semibold hover:bg-slate-50 dark:hover:bg-slate-700');
 
     return (
-        <div
-            onClick={onSelect}
-            className={`
-                ${config.rowBg} ${config.border}
-                border-y border-r border-slate-100 dark:border-slate-700/60
-                rounded-xl shadow-sm cursor-pointer transition-all duration-200
-                hover:shadow-md active:scale-[0.99]
-                ${isSelected ? 'ring-2 ring-indigo-500 ring-offset-1 dark:ring-offset-slate-900' : ''}
-            `}
-        >
-            {/* ── Mobile Layout ── */}
-            <div className="flex sm:hidden items-center gap-3 px-3 py-3 min-h-[64px]">
-                {/* Avatar */}
-                <div className={`shrink-0 w-10 h-10 rounded-full ${config.avatar} flex items-center justify-center shadow-sm`}>
-                    <span className="text-white text-sm font-black tracking-tight">{initials}</span>
-                </div>
+        <button type="button" aria-pressed={active} onClick={onClick} className={`${base} ${look}`}>
+            {alert ? (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 20h20L12 3z" /><path d="M12 10v4" /><path d="M12 17.5v.01" /></svg>
+            ) : (
+                <span className={`w-2.5 h-2.5 rounded-full ${dot} ${active ? 'ring-2 ring-white/70' : ''}`} />
+            )}
+            {label}
+            <span className={`font-black ${active ? 'text-white' : alert ? '' : 'text-slate-900 dark:text-white'}`}>{count}</span>
+        </button>
+    );
+}
 
-                {/* Name + status row */}
-                <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                        <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm truncate leading-tight">
-                            {m.name}
-                        </h3>
-                        <StatusBadge status={m.status} color={config.color} size="sm" />
-                    </div>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                        {m.location && (
-                            <span className={`font-mono text-[9px] px-1.5 py-0.5 rounded font-bold tracking-wider ${m.location === 'principal' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300'}`}>
-                                {m.location === 'principal' ? '116' : m.location.toUpperCase()}
-                            </span>
-                        )}
-                        <span className="font-mono text-[9px] bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded text-slate-500 dark:text-slate-400 font-bold">
-                            {m.vehicle}
-                        </span>
-                        {m.beetrack_info && (
-                            <span className="text-[9px] font-bold text-red-500">📍 {m.beetrack_info.progreso_str}</span>
-                        )}
-                        {m.finished_info && (
-                            <span className="text-[9px] font-bold text-emerald-600">🏁 {m.finished_info.hora_cierre}</span>
-                        )}
-                    </div>
-                </div>
-
-                {/* Assign button */}
-                <button
-                    onClick={(e) => { e.stopPropagation(); onAssign(); }}
-                    className="shrink-0 w-10 h-10 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl flex items-center justify-center shadow-sm active:scale-90 transition-all"
-                >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                </button>
+function Section({ title, dot, count, hint, action, children }) {
+    return (
+        <section className="flex flex-col gap-3 min-w-0">
+            <div className="flex items-baseline justify-between gap-2">
+                <h2 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                    <span className={`w-2.5 h-2.5 rounded-full ${dot}`} />
+                    {title}
+                    <span className="font-semibold text-slate-500 dark:text-slate-400">{count}</span>
+                </h2>
+                {action || (hint && <span className="text-xs text-slate-500 dark:text-slate-400">{hint}</span>)}
             </div>
+            {children}
+        </section>
+    );
+}
 
-            {/* ── Desktop Layout ── */}
-            <div className="hidden sm:flex items-center gap-4 px-4 py-3">
-                {/* Avatar + Name */}
-                <div className="flex items-center gap-3 w-1/3 min-w-[220px]">
-                    <div className={`shrink-0 w-9 h-9 rounded-full ${config.avatar} flex items-center justify-center shadow-sm`}>
-                        <span className="text-white text-xs font-black tracking-tight">{initials}</span>
-                    </div>
-                    <div className="flex flex-col gap-0.5 min-w-0">
-                        <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm truncate leading-tight">
-                            {m.name}
-                        </h3>
-                        <div className="flex items-center gap-1.5">
-                            {m.location && (
-                                <span className={`font-mono text-[10px] px-1.5 py-0.5 rounded font-bold tracking-wider whitespace-nowrap ${m.location === 'principal' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300'}`}>
-                                    {m.location === 'principal' ? '116' : m.location.toUpperCase()}
-                                </span>
-                            )}
-                            <span className="font-mono text-[10px] bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded text-slate-500 dark:text-slate-400 font-bold tracking-wider">
-                                {m.vehicle}
-                            </span>
-                        </div>
-                    </div>
+function EmptyNote({ children }) {
+    return (
+        <p className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 px-4 py-6 text-center text-sm text-slate-500 dark:text-slate-400">
+            {children}
+        </p>
+    );
+}
+
+function CollapsedGroup({ title, items, render, tone }) {
+    const chip = tone === 'violet'
+        ? 'bg-violet-50 dark:bg-violet-900/20 text-violet-800 dark:text-violet-300'
+        : 'bg-slate-100 dark:bg-slate-700/60 text-slate-700 dark:text-slate-300';
+
+    return (
+        <details className="group rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+            <summary className="list-none cursor-pointer px-4 py-3.5 flex flex-wrap items-center gap-x-3 gap-y-2 [&::-webkit-details-marker]:hidden">
+                <svg className="w-4 h-4 text-slate-500 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
+                <span className="text-[15px] font-extrabold text-slate-900 dark:text-white">{title}</span>
+                <span className="font-semibold text-slate-500 dark:text-slate-400">{items.length}</span>
+                <span className="flex flex-wrap gap-1.5 group-open:hidden">
+                    {items.slice(0, 6).map(m => (
+                        <span key={m.id} className={`px-2.5 py-1 rounded-full text-xs font-medium ${chip}`}>{render(m)}</span>
+                    ))}
+                    {items.length > 6 && <span className="px-2 py-1 text-xs text-slate-500">+{items.length - 6}</span>}
+                </span>
+            </summary>
+            <ul className="px-4 pb-4 grid gap-2 grid-cols-[repeat(auto-fill,minmax(260px,1fr))]">
+                {items.map(m => (
+                    <li key={m.id} className={`px-3 py-2 rounded-xl text-sm font-medium ${chip}`}>{render(m)}</li>
+                ))}
+                {items.length === 0 && <li className="text-sm text-slate-500">Nadie por ahora.</li>}
+            </ul>
+        </details>
+    );
+}
+
+// Partes comunes de las tarjetas
+function Avatar({ name, className }) {
+    const initials = name.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase();
+    return (
+        <span className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-black ${className}`}>
+            {initials}
+        </span>
+    );
+}
+
+function Identity({ m, avatar, right }) {
+    return (
+        <div className="flex items-center gap-3">
+            <Avatar name={m.name} className={avatar} />
+            <div className="flex-1 min-w-0 flex flex-col gap-1">
+                <span className="text-[15px] font-bold text-slate-900 dark:text-white truncate">{m.name}</span>
+                <span className="flex gap-1.5 font-mono text-[11px] font-bold">
+                    <span className={`px-1.5 py-0.5 rounded-md ${m.location === 'teusaquillo'
+                        ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300'
+                        : 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'}`}>
+                        {m.location === 'teusaquillo' ? 'TEUSAQUILLO' : '116'}
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">{m.vehicle}</span>
+                </span>
+            </div>
+            {right}
+        </div>
+    );
+}
+
+function cardClass(isSelected, border = 'border-slate-200 dark:border-slate-700') {
+    return `rounded-2xl border ${border} bg-white dark:bg-slate-800 shadow-sm cursor-pointer transition-shadow hover:shadow-md ${isSelected ? 'ring-2 ring-indigo-500 ring-offset-1 dark:ring-offset-slate-900' : ''}`;
+}
+
+function AssignButton({ onAssign, primary }) {
+    return (
+        <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onAssign(); }}
+            className={primary
+                ? 'h-11 w-full rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold shadow-sm'
+                : 'h-9 px-3 rounded-lg border border-slate-300 dark:border-slate-600 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700'}
+        >
+            {primary ? 'Asignar ruta' : 'Asignar'}
+        </button>
+    );
+}
+
+function AvailableCard({ m, now, idle, next, isSelected, onSelect, onAssign }) {
+    // Personal de apoyo: no hace rutas en DispatchTrack
+    if (!m.in_dispatchtrack) {
+        return (
+            <div onClick={onSelect} className={`${cardClass(isSelected, 'border-dashed border-slate-300 dark:border-slate-600')} !bg-slate-50 dark:!bg-slate-800/60 px-4 py-3 flex items-center gap-3`}>
+                <Avatar name={m.name} className="bg-slate-400 dark:bg-slate-600" />
+                <div className="flex-1 min-w-0 flex flex-col">
+                    <span className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">{m.name}</span>
+                    <span className="text-xs text-slate-600 dark:text-slate-400">Apoyo · no usa DispatchTrack{m.shift_end ? ` · turno hasta ${fmtTime(m.shift_end)}` : ''}</span>
                 </div>
+            </div>
+        );
+    }
 
-                {/* Middle columns */}
-                <div className="flex-1 flex items-center justify-between gap-4 lg:gap-6 px-4 lg:px-8">
-                    {/* Turno */}
-                    <div className="hidden lg:flex flex-col items-center gap-0.5 min-w-[90px]">
-                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Turno</span>
-                        <span className="font-mono text-xs text-slate-600 dark:text-slate-300 font-bold whitespace-nowrap">{m.shift_info}</span>
-                    </div>
+    const waitMs = idle ? now - new Date(idle.since).getTime() : null;
+    const leftMs = m.shift_end ? new Date(m.shift_end).getTime() - now : null;
 
-                    {/* Almuerzo */}
-                    <div className="flex flex-col items-center gap-0.5 min-w-[90px]">
-                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest hidden xl:block">Almuerzo</span>
-                        <div className="flex items-center gap-1">
-                            <span className="text-slate-300 xl:hidden text-sm">🍽️</span>
-                            <span className="font-mono text-xs text-slate-600 dark:text-slate-300 font-bold whitespace-nowrap">{m.lunch_range}</span>
-                        </div>
-                    </div>
-
-                    {/* Reporte */}
-                    <div className="hidden sm:flex flex-col items-center gap-0.5 min-w-[90px]">
-                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest hidden xl:block">Reporte</span>
-                        {m.finished_info ? (
-                            <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2.5 py-0.5 rounded-full border border-emerald-100 dark:border-emerald-800 whitespace-nowrap">
-                                🏁 {m.finished_info.hora_cierre}
-                            </span>
-                        ) : (
-                            <span className="text-xs font-bold text-slate-400 bg-slate-50 dark:bg-slate-700/50 px-2.5 py-0.5 rounded-full border border-slate-200 dark:border-slate-600 whitespace-nowrap">
-                                Pendiente
-                            </span>
-                        )}
-                    </div>
-
-                    {/* Beetrack progress */}
-                    <div className="flex items-center justify-center min-w-[120px] max-w-[200px] w-full">
-                        {m.beetrack_info ? (
-                            <div className="w-full flex flex-col gap-1">
-                                <div className="flex items-center justify-between">
-                                    <span className="text-[9px] font-bold text-red-500 tracking-wider uppercase">En Ruta</span>
-                                    <span className="text-[9px] font-mono font-bold text-slate-500">{m.beetrack_info.progreso_str}</span>
-                                </div>
-                                <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                                    <div className="h-full bg-gradient-to-r from-red-400 to-red-600 rounded-full transition-all duration-500" style={{ width: `${m.beetrack_info.porcentaje}%` }} />
-                                </div>
-                            </div>
-                        ) : (
-                            <span className="text-slate-300 dark:text-slate-600 italic text-xs">Sin actividad</span>
-                        )}
-                    </div>
+    return (
+        <div onClick={onSelect} className={`${cardClass(isSelected, next ? 'border-indigo-300 dark:border-indigo-700' : undefined)} p-4 flex flex-col gap-3.5`}>
+            <Identity
+                m={m}
+                avatar="bg-emerald-600"
+                right={next && <span className="shrink-0 px-2.5 py-1 rounded-full bg-indigo-50 dark:bg-indigo-900/40 text-indigo-800 dark:text-indigo-300 text-xs font-bold">Siguiente</span>}
+            />
+            <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-0.5">
+                    <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">Sin ruta</span>
+                    <span className={`font-mono text-lg font-bold ${waitMs === null ? 'text-slate-400' : waitMs >= 3600000 ? 'text-amber-700 dark:text-amber-400' : 'text-emerald-700 dark:text-emerald-400'}`}>
+                        {waitMs === null ? '—' : fmtDuration(waitMs)}
+                    </span>
+                    <span className="text-xs text-slate-600 dark:text-slate-400">
+                        {idle ? `desde ${IDLE_REASON[idle.reason] || idle.reason} · ${fmtTime(idle.since)}` : 'sin datos de DispatchTrack'}
+                    </span>
                 </div>
-
-                {/* Status + Action */}
-                <div className="flex flex-col items-end gap-2 min-w-[120px]">
-                    <StatusBadge status={m.status} color={config.color} />
-                    <button
-                        onClick={(e) => { e.stopPropagation(); onAssign(); }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-[10px] font-black uppercase tracking-wider shadow-sm transition-all active:scale-95"
-                    >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                        Asignar
-                    </button>
+                <div className="flex flex-col gap-0.5">
+                    <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">Turno restante</span>
+                    <span className={`font-mono text-lg font-bold ${leftMs !== null && leftMs <= 0 ? 'text-red-700 dark:text-red-400' : 'text-slate-900 dark:text-white'}`}>
+                        {leftMs === null ? '—' : leftMs > 0 ? fmtDuration(leftMs) : 'Terminó'}
+                    </span>
+                    <span className="text-xs text-slate-600 dark:text-slate-400">{m.shift_end ? `${leftMs > 0 ? 'hasta' : 'a las'} ${fmtTime(m.shift_end)}` : 'sin turno'}</span>
                 </div>
+            </div>
+            <AssignButton onAssign={onAssign} primary />
+        </div>
+    );
+}
+
+function RouteCard({ m, now, alert, activity, isSelected, onSelect, onAssign }) {
+    const info = m.beetrack_info;
+    const critical = alert && alert.minutes >= alert.threshold * 1.5;
+    const meta = activity
+        ? `${activity.last_at ? `Última guía hace ${fmtDuration(now - new Date(activity.last_at).getTime())}` : 'Sin guías gestionadas'} · inició ${fmtTime(activity.started_at)}`
+        : null;
+
+    return (
+        <div onClick={onSelect} className={`${cardClass(isSelected, alert ? 'border-amber-300 dark:border-amber-700' : undefined)} px-4 py-3.5 flex flex-col gap-2.5`}>
+            <Identity
+                m={m}
+                avatar="bg-red-600"
+                right={info && <span className="shrink-0 font-mono text-sm font-bold text-slate-700 dark:text-slate-200">{info.progreso_str}</span>}
+            />
+            {info && (
+                <div className="h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden" role="progressbar" aria-valuenow={info.porcentaje} aria-valuemin="0" aria-valuemax="100" aria-label="Guías gestionadas">
+                    <div className="h-full rounded-full bg-red-500 transition-all duration-500" style={{ width: `${info.porcentaje}%` }} />
+                </div>
+            )}
+            {alert && (
+                <div className={`flex items-start gap-2 px-2.5 py-2 rounded-xl text-[13px] font-semibold ${critical
+                    ? 'bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-300'
+                    : 'bg-amber-50 dark:bg-amber-900/20 text-amber-900 dark:text-amber-200'}`}>
+                    <svg className="w-4 h-4 mt-0.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 20h20L12 3z" /><path d="M12 10v4" /><path d="M12 17.5v.01" /></svg>
+                    <span className="flex-1">{alertText(alert)}</span>
+                    <span className="font-mono font-bold whitespace-nowrap">{alert.minutes} min</span>
+                </div>
+            )}
+            <div className="flex items-center justify-between gap-2">
+                <span className="text-[13px] text-slate-600 dark:text-slate-400">{meta}</span>
+                <AssignButton onAssign={onAssign} />
             </div>
         </div>
     );
 }
 
-function StatusBadge({ status, color, size = 'md' }) {
-    const colors = {
-        red: 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800',
-        amber: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800',
-        emerald: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800',
-        slate: 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-700 dark:text-slate-400 dark:border-slate-600',
-    };
-
-    const sizing = size === 'sm' ? 'px-2 py-0.5 text-[9px]' : 'px-3 py-1 text-[10px]';
+function LunchCard({ m, now, isSelected, onSelect, onAssign }) {
+    const start = m.lunch_start ? new Date(m.lunch_start).getTime() : null;
+    const end = m.lunch_end ? new Date(m.lunch_end).getTime() : null;
+    const pct = start && end && end > start ? Math.min(100, Math.max(0, ((now - start) / (end - start)) * 100)) : 0;
 
     return (
-        <span className={`rounded-full font-black border ${colors[color]} ${sizing} uppercase tracking-wide whitespace-nowrap`}>
-            {status}
-        </span>
+        <div onClick={onSelect} className={`${cardClass(isSelected)} px-4 py-3.5 flex flex-col gap-2.5`}>
+            <div className="flex items-center gap-3">
+                <Avatar name={m.name} className="bg-amber-600" />
+                <div className="flex-1 min-w-0 flex flex-col">
+                    <span className="text-[15px] font-bold text-slate-900 dark:text-white truncate">{m.name}</span>
+                    <span className="text-[13px] text-slate-600 dark:text-slate-400">{end ? `Regresa a las ${fmtTime(m.lunch_end)}` : m.lunch_range}</span>
+                </div>
+                {end && (
+                    <span className="shrink-0 flex flex-col items-end">
+                        <span className="font-mono text-base font-bold text-amber-800 dark:text-amber-300">{fmtDuration(Math.max(0, end - now))}</span>
+                        <span className="text-xs text-slate-600 dark:text-slate-400">restantes</span>
+                    </span>
+                )}
+            </div>
+            <div className="h-1.5 rounded-full bg-amber-100 dark:bg-amber-900/30 overflow-hidden">
+                <div className="h-full rounded-full bg-amber-500" style={{ width: `${pct}%` }} />
+            </div>
+        </div>
     );
 }
 
-function FilterBadge({ active, onClick, label, color }) {
-    const defaultClasses = "px-3 py-2 rounded-full text-xs font-bold border cursor-pointer transition-all duration-200 whitespace-nowrap shadow-sm min-h-[36px] flex items-center";
-
-    const colors = {
-        blue: active ? 'bg-blue-500 text-white border-blue-600 shadow-blue-500/30 ring-2 ring-blue-500 ring-offset-1 dark:ring-offset-slate-900' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700',
-        teal: active ? 'bg-teal-500 text-white border-teal-600 shadow-teal-500/30 ring-2 ring-teal-500 ring-offset-1 dark:ring-offset-slate-900' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700',
-        red: active ? 'bg-red-500 text-white border-red-600 shadow-red-500/30 ring-2 ring-red-500 ring-offset-1 dark:ring-offset-slate-900' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700',
-        emerald: active ? 'bg-emerald-500 text-white border-emerald-600 shadow-emerald-500/30 ring-2 ring-emerald-500 ring-offset-1 dark:ring-offset-slate-900' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700',
-        amber: active ? 'bg-amber-500 text-white border-amber-600 shadow-amber-500/30 ring-2 ring-amber-500 ring-offset-1 dark:ring-offset-slate-900' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700',
-        violet: active ? 'bg-violet-500 text-white border-violet-600 shadow-violet-500/30 ring-2 ring-violet-500 ring-offset-1 dark:ring-offset-slate-900' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700',
-    };
-
+// Por iniciar y finalizados, cuando se filtran por su contador
+function CompactCard({ m, group, isSelected, onSelect, onAssign }) {
+    const finished = group === 'finalizados';
     return (
-        <button type="button" onClick={onClick} className={`${defaultClasses} ${colors[color]}`}>
-            {label}
-        </button>
+        <div onClick={onSelect} className={`${cardClass(isSelected)} px-4 py-3 flex items-center gap-3`}>
+            <Avatar name={m.name} className={finished ? 'bg-violet-600' : 'bg-slate-500'} />
+            <div className="flex-1 min-w-0 flex flex-col">
+                <span className="text-sm font-bold text-slate-900 dark:text-white truncate">{m.name}</span>
+                <span className="text-xs text-slate-600 dark:text-slate-400">
+                    {finished ? `Cerró a las ${m.finished_info?.hora_cierre ?? ''}` : `Turno inicia ${fmtTime(m.shift_start)}`}
+                </span>
+            </div>
+            {!finished && m.in_dispatchtrack && <AssignButton onAssign={onAssign} />}
+        </div>
     );
 }
