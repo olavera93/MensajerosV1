@@ -14,10 +14,10 @@ use Illuminate\Support\Facades\Log;
  */
 class ShiftCompletionSyncService
 {
+    use \App\Traits\ReadsDispatchTrackRoutes;
+
     // Campos de hora de gestión que puede traer un despacho, por orden de preferencia
     private const DISPATCH_TIME_FIELDS = ['arrived_at', 'delivered_at', 'finished_at', 'managed_at'];
-
-    private const MANAGED_STATUSES = ['completed', 'delivered', 'failed', 'partial'];
 
     protected $apiKey;
     protected $baseUrl;
@@ -40,6 +40,7 @@ class ShiftCompletionSyncService
         $includeOpenRoutes = $date->copy()->startOfDay()->lt(today());
 
         $messengers = Messenger::where('is_active', true)
+            ->inDispatchTrack()
             ->when($messengerId, fn($q) => $q->where('id', $messengerId))
             ->get();
 
@@ -165,25 +166,6 @@ class ShiftCompletionSyncService
         return $details;
     }
 
-    private function routeBelongsTo(array $route, Messenger $messenger): bool
-    {
-        if ($messenger->beetrack_id) {
-            $driverIds = array_filter([$route['driver_identifier'] ?? null, $route['driver_id'] ?? null]);
-            if (in_array(strtolower(trim($messenger->beetrack_id)), array_map(fn($id) => strtolower(trim((string) $id)), $driverIds), true)) {
-                return true;
-            }
-        }
-
-        $plate = $this->normalizePlate($route['truck']['identifier'] ?? ($route['truck_identifier'] ?? ''));
-
-        return $plate !== '' && $plate === $this->normalizePlate($messenger->vehicle ?? '');
-    }
-
-    private function normalizePlate(string $plate): string
-    {
-        return strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $plate));
-    }
-
     private function dispatchesOf(array $detail): array
     {
         $route = $detail['route'] ?? $detail;
@@ -199,7 +181,7 @@ class ShiftCompletionSyncService
         $last = null;
 
         foreach ($this->dispatchesOf($detail) as $dispatch) {
-            if (!in_array($dispatch['status'] ?? '', self::MANAGED_STATUSES, true)) {
+            if (!$this->isManaged($dispatch)) {
                 continue;
             }
 
@@ -225,11 +207,6 @@ class ShiftCompletionSyncService
         }
 
         return null;
-    }
-
-    private function toLocal(string $value): Carbon
-    {
-        return Carbon::parse($value)->setTimezone(config('app.timezone'));
     }
 
     private function result(Messenger $messenger, string $status, string $detail, ?Carbon $time = null): array
