@@ -1,6 +1,6 @@
 // Service Worker — Logística LFH
 // Bump CACHE_NAME en cada deploy para limpiar caché viejo
-const CACHE_NAME = 'lfh-v11';
+const CACHE_NAME = 'lfh-v12';
 
 // Solo se guarda lo público: assets compilados, iconos y la pantalla de mensajeros.
 // Nada con sesión iniciada (dashboard, reportes, exportaciones) queda en el navegador.
@@ -14,7 +14,9 @@ const networkFirst = (event) => {
         fetch(event.request)
             .then((response) => {
                 if (response.ok) {
-                    caches.open(CACHE_NAME).then((cache) => cache.put(event.request, response.clone()));
+                    // Se copia antes de devolverla: después el navegador ya consumió el cuerpo
+                    const copy = response.clone();
+                    caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
                 }
                 return response;
             })
