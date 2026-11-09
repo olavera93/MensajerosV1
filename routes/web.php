@@ -44,6 +44,13 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/dashboard', [UnifiedController::class, 'index'])->name('dashboard');
     });
 
+    // Datos en vivo que consume el dashboard (DispatchTrack, estados, punto de despacho)
+    Route::middleware(['module:dashboard,messengers.index'])->group(function () {
+        Route::get('/messenger-status', [UnifiedController::class, 'getMessengerStatus'])->name('messenger.status');
+        Route::get('/messenger-status-beetrack', [UnifiedController::class, 'getBeetrackAsync'])->name('messenger.status.beetrack');
+        Route::post('/dispatch', [DispatchController::class, 'store'])->name('dispatch.store');
+    });
+
     // 2. Almuerzo
     Route::middleware(['module:reports.lunch'])->group(function () {
         Route::get('/reports/lunch', [LunchController::class, 'report'])->name('reports.lunch');
@@ -91,11 +98,6 @@ Route::middleware(['auth'])->group(function () {
     // 7. Gestión de Mensajeros
     Route::middleware(['module:messengers.index'])->group(function () {
         Route::resource('messengers', MessengerController::class);
-        // Utilidades Operativas (Relacionadas con mensajeros)
-        Route::get('/messenger-status', [UnifiedController::class, 'getMessengerStatus'])->name('messenger.status');
-        Route::get('/messenger-status-beetrack', [UnifiedController::class, 'getBeetrackAsync'])->name('messenger.status.beetrack');
-
-        Route::post('/dispatch', [DispatchController::class, 'store'])->name('dispatch.store');
     });
 
     // 8. Horarios
