@@ -57,7 +57,7 @@ class UnifiedController extends Controller
         return response()->json([
             'beetrack_data' => $beetrackData,
             'alerts' => $alerts,
-            'alert_limits' => config('services.beetrack.alerts'),
+            'alert_limits' => \App\Services\LiveAlertService::limits(),
             'available_since' => (object) $availableSince,
             'route_activity' => (object) $routeActivity,
             'timestamp' => now()->toDateTimeString()

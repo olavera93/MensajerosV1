@@ -19,10 +19,21 @@ class LiveAlertService
     {
     }
 
+    /**
+     * Umbrales de alerta, con valores por defecto si la configuración en caché aún no los trae.
+     */
+    public static function limits(): array
+    {
+        return array_merge(
+            ['idle_minutes' => 45, 'first_guide_minutes' => 60, 'return_minutes' => 45],
+            config('services.beetrack.alerts') ?? []
+        );
+    }
+
     public function alerts(?Carbon $now = null): array
     {
         $now = $now ?? now();
-        $limits = config('services.beetrack.alerts');
+        $limits = self::limits();
         $routes = $this->startedRoutes();
 
         $alerts = [];
