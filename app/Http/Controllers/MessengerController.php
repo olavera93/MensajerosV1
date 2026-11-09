@@ -79,6 +79,19 @@ class MessengerController extends Controller
 
     public function destroy(Messenger $messenger)
     {
+        // Borrar en cascada se llevaría almuerzos, turnos, reportes y despachos; con historial solo se desactiva
+        $hasHistory = $messenger->lunchLogs()->exists()
+            || $messenger->shifts()->exists()
+            || $messenger->shiftCompletions()->exists()
+            || $messenger->preoperationalReports()->exists()
+            || $messenger->cleaningReports()->exists()
+            || \App\Models\DispatchLog::where('messenger_id', $messenger->id)->exists();
+
+        if ($hasHistory) {
+            return redirect()->route('messengers.index')->with('error',
+                "{$messenger->name} tiene historial registrado y no se puede eliminar sin perderlo. Edítalo y márcalo como inactivo.");
+        }
+
         $messenger->delete();
         $this->broadcastStatus();
         return redirect()->route('messengers.index')->with('success', 'Mensajero eliminado.');

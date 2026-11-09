@@ -1,6 +1,13 @@
 // Service Worker — Logística LFH
 // Bump CACHE_NAME en cada deploy para limpiar caché viejo
-const CACHE_NAME = 'lfh-v10';
+const CACHE_NAME = 'lfh-v11';
+
+// Solo se guarda lo público: assets compilados, iconos y la pantalla de mensajeros.
+// Nada con sesión iniciada (dashboard, reportes, exportaciones) queda en el navegador.
+const CACHEABLE = (url) =>
+    url.pathname.startsWith('/build/') ||
+    url.pathname.startsWith('/icons/') ||
+    ['/manifest.json', '/favicon.ico', '/messenger'].includes(url.pathname);
 
 const networkFirst = (event) => {
     event.respondWith(
@@ -36,6 +43,8 @@ self.addEventListener('fetch', (event) => {
     // Dejar pasar XHR de Inertia (datos dinámicos, no cachear)
     if (request.headers.get('X-Inertia')) return;
 
-    // NetworkFirst para todo lo demás: HTML, assets, iconos
+    // Lo demás va directo a la red, sin guardar copia
+    if (!CACHEABLE(url)) return;
+
     networkFirst(event);
 });

@@ -9,7 +9,7 @@ import SelectInput from '@/Components/SelectInput';
 import InputLabel from '@/Components/InputLabel';
 import InputError from '@/Components/InputError';
 
-export default function UserIndex({ users, assignableRoles = [] }) {
+export default function UserIndex({ users, assignableRoles = [], grantableModules = [] }) {
     const [showModal, setShowModal] = useState(false);
     const [editingUser, setEditingUser] = useState(null);
     const { data: form, setData: setForm, post, put, processing, errors, clearErrors, reset } = useForm({
@@ -49,6 +49,8 @@ export default function UserIndex({ users, assignableRoles = [] }) {
         }
         setShowModal(true);
     };
+
+    const isSelf = !!editingUser?.is_self;
 
     const handleModuleToggle = (moduleId) => {
         const currentModules = [...form.modules];
@@ -151,20 +153,28 @@ export default function UserIndex({ users, assignableRoles = [] }) {
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                             <div className="flex justify-end gap-3">
-                                                <button
-                                                    onClick={() => openModal(user)}
-                                                    className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-900 font-bold uppercase text-[10px] tracking-widest transition-colors"
-                                                    title="Editar Usuario"
-                                                >
-                                                    EDITAR
-                                                </button>
-                                                <button
-                                                    onClick={() => deleteUser(user)}
-                                                    className="text-red-600 dark:text-red-400 hover:text-red-900 font-bold uppercase text-[10px] tracking-widest transition-colors"
-                                                    title="Eliminar Usuario"
-                                                >
-                                                    ELIMINAR
-                                                </button>
+                                                {user.manageable ? (
+                                                    <button
+                                                        onClick={() => openModal(user)}
+                                                        className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-900 font-bold uppercase text-[10px] tracking-widest transition-colors"
+                                                        title="Editar Usuario"
+                                                    >
+                                                        EDITAR
+                                                    </button>
+                                                ) : (
+                                                    <span className="text-gray-300 dark:text-gray-600 text-[10px] font-bold uppercase tracking-widest" title="Solo puedes administrar usuarios de un rol inferior">
+                                                        Sin permiso
+                                                    </span>
+                                                )}
+                                                {user.manageable && !user.is_self && (
+                                                    <button
+                                                        onClick={() => deleteUser(user)}
+                                                        className="text-red-600 dark:text-red-400 hover:text-red-900 font-bold uppercase text-[10px] tracking-widest transition-colors"
+                                                        title="Eliminar Usuario"
+                                                    >
+                                                        ELIMINAR
+                                                    </button>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>
@@ -225,6 +235,11 @@ export default function UserIndex({ users, assignableRoles = [] }) {
 
                             <div>
                                 <InputLabel htmlFor="role" value="Rol Base" />
+                                {isSelf ? (
+                                    <p className="mt-1 px-3 py-2 rounded-md bg-slate-50 dark:bg-gray-700 text-sm text-slate-600 dark:text-slate-300">
+                                        {form.role} · no puedes cambiar tu propio rol
+                                    </p>
+                                ) : (
                                 <SelectInput
                                     id="role"
                                     className="mt-1 block w-full"
@@ -243,14 +258,16 @@ export default function UserIndex({ users, assignableRoles = [] }) {
                                             <option key={value} value={value}>{label}</option>
                                         ))}
                                 </SelectInput>
+                                )}
                                 <InputError message={errors.role} className="mt-2" />
                             </div>
                         </div>
 
+                        {!isSelf && (
                         <div className="border-t border-gray-100 dark:border-gray-700 pt-6">
                             <InputLabel value="Habilitar Accesos Manuales" className="mb-4" />
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                {AVAILABLE_MODULES.map((mod) => (
+                                {AVAILABLE_MODULES.filter((mod) => grantableModules.includes(mod.id)).map((mod) => (
                                     <button
                                         key={mod.id}
                                         type="button"
@@ -274,10 +291,12 @@ export default function UserIndex({ users, assignableRoles = [] }) {
                                     </button>
                                 ))}
                             </div>
+                            <InputError message={errors.modules || Object.entries(errors).find(([k]) => k.startsWith('modules.'))?.[1]} className="mt-2" />
                             <p className="mt-3 text-[10px] text-slate-400 italic">
-                                * Nota: Si selecciona módulos aquí, estos serán los únicos accesibles para el usuario, ignorando los permisos por defecto de su rol.
+                                * Nota: Si selecciona módulos aquí, estos serán los únicos accesibles para el usuario, ignorando los permisos por defecto de su rol. Solo puedes otorgar módulos a los que tú tienes acceso.
                             </p>
                         </div>
+                        )}
 
                         <div className="flex items-center justify-end mt-6 gap-3">
                             <SecondaryButton onClick={() => setShowModal(false)}>

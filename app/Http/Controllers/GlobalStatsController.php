@@ -176,7 +176,6 @@ class GlobalStatsController extends Controller
             \Log::error('Error in GlobalStatsController@data: ' . $e->getMessage());
             return response()->json([
                 'error' => 'Error al cargar las estadísticas',
-                'message' => $e->getMessage()
             ], 500);
         }
     }

@@ -65,7 +65,6 @@ class CleaningController extends Controller
             ]);
             return response()->json([
                 'error' => 'Error interno del servidor al procesar el reporte.',
-                'details' => $e->getMessage()
             ], 500);
         }
     }

@@ -138,7 +138,8 @@ class ShiftCompletionController extends Controller
                 }
             }
         } catch (\Exception $e) {
-            return response()->json(['error' => 'Error sincronizando con DispatchTrack: ' . $e->getMessage()], 502);
+            \Log::error('Error sincronizando fin de turno con DispatchTrack: ' . $e->getMessage());
+            return response()->json(['error' => 'Error sincronizando con DispatchTrack. Intenta de nuevo en unos minutos.'], 502);
         }
 
         if ($end->isToday() && ($totals['created'] + $totals['updated']) > 0) {

@@ -8,6 +8,25 @@ use Symfony\Component\HttpFoundation\Response;
 
 class CheckModule
 {
+    public const MODULES = [
+        'dashboard', 'shifts.index', 'messengers.index',
+        'reports.lunch', 'reports.exit', 'reports.preoperational',
+        'reports.cleaning', 'reports.global-stats',
+        'external-forms.index', 'users.index', 'procedures.index',
+    ];
+
+    /**
+     * Módulos a los que el usuario tiene acceso efectivo.
+     */
+    public static function modulesFor($user): array
+    {
+        if (in_array($user->role, ['desarrollador', 'administrador'])) {
+            return self::MODULES;
+        }
+
+        return $user->modules ?: self::defaultModulesForRole($user->role);
+    }
+
     /**
      * Handle an incoming request.
      *
@@ -22,17 +41,8 @@ class CheckModule
             return redirect('/');
         }
 
-        // Desarrollador y administrador tienen acceso a todo
-        if (in_array($user->role, ['desarrollador', 'administrador'])) {
-            return $next($request);
-        }
-
-        $userModules = $user->modules ?: [];
-
-        // Si no tiene módulos asignados explícitamente, usar defaults por rol
-        if (empty($userModules)) {
-            $userModules = $this->defaultModulesForRole($user->role);
-        }
+        // Desarrollador y administrador tienen todos; el resto, sus módulos o los de su rol
+        $userModules = self::modulesFor($user);
 
         // Verificar si el usuario tiene al menos uno de los módulos requeridos
         $hasAccess = false;
@@ -50,15 +60,10 @@ class CheckModule
         return $next($request);
     }
 
-    private function defaultModulesForRole(string $role): array
+    private static function defaultModulesForRole(string $role): array
     {
         return match ($role) {
-            'lider' => [
-                'dashboard', 'shifts.index', 'messengers.index',
-                'reports.lunch', 'reports.exit', 'reports.preoperational',
-                'reports.cleaning', 'reports.global-stats',
-                'external-forms.index', 'users.index', 'procedures.index',
-            ],
+            'lider' => self::MODULES,
             'regente' => ['reports.preoperational'],
             default => [],
         };

@@ -136,11 +136,8 @@ export default function Landing() {
             const errorData = error.response?.data;
             let errorMessage = errorData?.error || 'Ocurrió un error guardando el reporte.';
 
-            if (errorData?.message) {
+            if (error.response?.status === 422 && errorData?.message) {
                 errorMessage += `\n\nDetalles: ${errorData.message}`;
-            }
-            if (errorData?.file) {
-                errorMessage += `\nArchivo: ${errorData.file} (Línea: ${errorData.line})`;
             }
 
             alert(errorMessage);

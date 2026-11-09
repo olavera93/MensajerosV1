@@ -61,6 +61,12 @@ export default function Index({ messengers, filters }) {
                     </div>
                 )}
 
+                {flash.error && (
+                    <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-xl" role="alert">
+                        <p>{flash.error}</p>
+                    </div>
+                )}
+
                 {/* ── Mobile Card List (< sm) ── */}
                 <div className="flex sm:hidden flex-col gap-3 mb-6">
                     {messengers.data.map((messenger) => (

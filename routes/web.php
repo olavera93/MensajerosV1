@@ -19,7 +19,7 @@ use App\Http\Controllers\GlobalStatsController;
 
 // Públicas / Login
 Route::get('/', [AuthController::class, 'loginView'])->name('login');
-Route::post('/login', [AuthController::class, 'login'])->name('login.attempt');
+Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:20,1')->name('login.attempt');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
 // Landing para Mensajeros (Sin Auth o con Auth básico si se prefiere, pero actualmente parece libre)

@@ -39,6 +39,10 @@ export default function LeaderLayout({ children, title, onPurgeClick }) {
 
     const logout = (e) => {
         e.preventDefault();
+        // Borra cualquier copia guardada por el service worker antes de salir
+        if ('caches' in window) {
+            caches.keys().then((keys) => keys.forEach((k) => caches.delete(k))).catch(() => { });
+        }
         router.post(route('logout'));
     };
 
