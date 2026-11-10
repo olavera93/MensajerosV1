@@ -815,6 +815,7 @@ function LunchCard({ m, now, isSelected, onSelect, onAssign }) {
                         <span className="text-xs text-slate-600 dark:text-slate-400">restantes</span>
                     </span>
                 )}
+                {m.in_dispatchtrack && <AssignButton onAssign={onAssign} />}
             </div>
             <div className="h-1.5 rounded-full bg-amber-100 dark:bg-amber-900/30 overflow-hidden">
                 <div className="h-full rounded-full bg-amber-500" style={{ width: `${pct}%` }} />
