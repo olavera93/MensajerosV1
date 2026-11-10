@@ -146,15 +146,6 @@ export default function Login({ status }) {
                         <span className="text-lg leading-none">🛵</span>
                         Soy Mensajero
                     </Link>
-                    <a
-                        href="https://lib.bibliotecalfh.com"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center justify-center gap-2 w-full px-4 py-3 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 rounded-xl font-bold text-sm uppercase tracking-wider hover:bg-slate-50 dark:hover:bg-slate-700 active:scale-95 transition-all duration-150 shadow-sm"
-                    >
-                        <span className="text-lg leading-none">📚</span>
-                        Biblioteca LFH
-                    </a>
                 </div>
             </div>
         </div>
