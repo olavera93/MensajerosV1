@@ -14,7 +14,19 @@ class DispatchLog extends Model
         'location_id',
         'consecutive',
         'guides_count',
+        'source_batch',
+        'user_id',
+        'dt_status',
+        'dt_route_id',
+        'dt_truck',
+        'dt_guides',
+        'dt_sent_at',
         'date',
+    ];
+
+    protected $casts = [
+        'dt_guides' => 'array',
+        'dt_sent_at' => 'datetime',
     ];
 
     public function messenger()

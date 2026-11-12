@@ -38,12 +38,23 @@ return [
     'beetrack' => [
         'api_key' => env('BEETRACK_API_KEY'),
         'url' => env('BEETRACK_URL', 'https://farmaciahom.dispatchtrack.com/api/external/v1/routes'),
+        // Crear la ruta directamente en DispatchTrack (importación del rutero). Apagado hasta validarlo.
+        'create_routes' => (bool) env('DISPATCHTRACK_CREATE_ROUTES', false),
         // Minutos sin actividad para las alertas del dashboard
         'alerts' => [
             'idle_minutes' => (int) env('ALERT_IDLE_MINUTES', 45),
             'first_guide_minutes' => (int) env('ALERT_FIRST_GUIDE_MINUTES', 60),
             'return_minutes' => (int) env('ALERT_RETURN_MINUTES', 45),
         ],
+    ],
+
+    // Odoo (solo lectura): los OUT de un batch se convierten en el rutero de DispatchTrack
+    'odoo' => [
+        'url' => rtrim((string) env('ODOO_URL', ''), '/'),
+        'db' => env('ODOO_DB'),
+        'username' => env('ODOO_USERNAME'),
+        'api_key' => env('ODOO_API_KEY'),
+        'timezone' => env('ODOO_TIMEZONE', 'America/Bogota'),
     ],
 
 ];

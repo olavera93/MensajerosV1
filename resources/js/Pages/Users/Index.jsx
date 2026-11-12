@@ -194,14 +194,19 @@ function UserEditor({ user, users, catalog, grantable, onClose }) {
     const has = (key) => data.permissions.includes(key);
     const setPerms = (list) => setData('permissions', [...new Set(list)]);
 
+    // Acciones que necesitan otra (p. ej. Crear ruta en DispatchTrack necesita Asignar ruta)
+    const requires = Object.fromEntries(catalog.flatMap(g => g.actions.map(a => [a.key, a.requires || []])));
+    const dependentsOf = (key) => Object.keys(requires).filter(k => requires[k].includes(key));
+
     const toggleAction = (g, key) => {
         const view = `${g.key}.ver`;
         if (has(key)) {
-            // Quitar "Ver" quita todo el módulo
-            setPerms(key === view ? data.permissions.filter(p => !p.startsWith(`${g.key}.`)) : data.permissions.filter(p => p !== key));
+            // Quitar "Ver" quita todo el módulo; quitar una acción quita también las que dependen de ella
+            const removed = key === view ? data.permissions.filter(p => p.startsWith(`${g.key}.`)) : [key, ...dependentsOf(key)];
+            setPerms(data.permissions.filter(p => !removed.includes(p)));
         } else {
-            // Cualquier acción incluye "Ver"
-            setPerms([...data.permissions, key, view]);
+            // Cualquier acción incluye "Ver" y lo que necesita para funcionar
+            setPerms([...data.permissions, key, view, ...(requires[key] || [])]);
         }
     };
     const toggleModule = (g) => {

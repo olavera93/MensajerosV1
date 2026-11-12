@@ -19,7 +19,7 @@ const getPriority = (status) => {
     return 10;
 };
 
-export default function Dashboard({ messengers, dispatch_locations, beetrack_data, assignable_states = [] }) {
+export default function Dashboard({ messengers, dispatch_locations, beetrack_data, assignable_states = [], dispatchtrack_create = false }) {
     const can = useCan();
     // Grupo del tablero → estado configurable en Configuración
     const STATE_OF_GROUP = { disponibles: 'disponible', ruta: 'ruta', almuerzo: 'almuerzo', 'por-iniciar': 'por-iniciar', finalizados: 'finalizado' };
@@ -42,6 +42,15 @@ export default function Dashboard({ messengers, dispatch_locations, beetrack_dat
     const [lastUpdated, setLastUpdated] = useState(new Date());
     const [beetrackLoading, setBeetrackLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    // Origen de las guías: batch de Odoo (por defecto) o Excel de respaldo
+    const [source, setSource] = useState('odoo');
+    const [batch, setBatch] = useState('');
+    const [preview, setPreview] = useState(null);
+    const [previewState, setPreviewState] = useState({ loading: false, error: '' });
+    const [generating, setGenerating] = useState(false);
+    const [submitError, setSubmitError] = useState('');
+    // Envío directo a DispatchTrack: null | 'confirm' | 'sending' | { duplicates } | { logId, status, message }
+    const [dtState, setDtState] = useState(null);
     const [alerts, setAlerts] = useState([]);
     const [alertLimits, setAlertLimits] = useState(null);
     const [availableSince, setAvailableSince] = useState({});
@@ -214,31 +223,87 @@ export default function Dashboard({ messengers, dispatch_locations, beetrack_dat
     }, []);
 
     // --- Dispatch Form Handler ---
-    const handleDispatchSubmit = (e) => {
-        e.preventDefault();
+    const loadPreview = () => {
+        const value = batch.trim();
+        if (!value) return;
+        setPreview(null);
+        setPreviewState({ loading: true, error: '' });
+        fetch(`${route('dispatch.odoo-preview')}?${new URLSearchParams({ batch: value })}`, { headers: { Accept: 'application/json' } })
+            .then(r => r.json().catch(() => ({})).then(body => {
+                if (!r.ok) throw new Error(body.message || 'No se pudo consultar Odoo.');
+                return body;
+            }))
+            .then(body => { setPreview(body); setPreviewState({ loading: false, error: '' }); })
+            .catch(err => setPreviewState({ loading: false, error: err.message }));
+    };
+
+    const buildDispatchForm = () => {
         const formData = new FormData();
-        formData.append('file', data.file);
+        if (source === 'odoo') {
+            formData.append('odoo_batch', preview?.batch || '');
+        } else {
+            formData.append('file', data.file);
+        }
         formData.append('location_id', data.location_id);
         formData.append('messenger_id', data.messenger_id);
         formData.append('last_route', data.last_route ? '1' : '0');
         formData.append('output_name', data.output_name);
-
-        // Send token both in form data and headers for maximum compatibility
         const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
         if (token) formData.append('_token', token);
+        return { formData, token };
+    };
 
+    // DispatchTrack procesa la importación en segundo plano: se consulta hasta confirmar la ruta
+    const trackDispatchTrack = (logId) => {
+        const check = () => fetch(route('dispatch.dispatchtrack-status', logId), { headers: { Accept: 'application/json' } })
+            .then(r => r.json())
+            .then(body => {
+                setDtState(prev => (prev && prev.logId === logId ? { ...prev, status: body.status, message: body.message, routeId: body.route_id } : prev));
+                if (body.status === 'queued') setTimeout(check, 10000);
+                else if (body.status === 'created') pollRef.current?.();
+            })
+            .catch(() => setTimeout(check, 15000));
+        setTimeout(check, 5000);
+    };
+
+    const sendToDispatchTrack = (confirmDuplicates = false) => {
+        const { formData, token } = buildDispatchForm();
+        formData.append('send_to_dispatchtrack', '1');
+        if (confirmDuplicates) formData.append('confirm_duplicates', '1');
+        setSubmitError('');
+        setDtState('sending');
+        fetch(route('dispatch.store'), { method: 'POST', body: formData, headers: { 'X-CSRF-TOKEN': token, Accept: 'application/json' } })
+            .then(r => r.json().catch(() => ({})).then(body => ({ ok: r.ok, status: r.status, body })))
+            .then(({ ok, status, body }) => {
+                if (status === 409) return setDtState({ duplicates: body.duplicates || [] });
+                if (!ok) {
+                    const firstError = body.errors ? Object.values(body.errors)[0]?.[0] : null;
+                    setDtState(null);
+                    return setSubmitError(firstError || body.message || 'No se pudo crear la ruta en DispatchTrack.');
+                }
+                setDtState({ logId: body.log_id, status: 'queued', message: body.message });
+                trackDispatchTrack(body.log_id);
+            })
+            .catch(() => { setDtState(null); setSubmitError('No se pudo contactar el servidor.'); });
+    };
+
+    const handleDispatchSubmit = (e) => {
+        e.preventDefault();
+        setSubmitError('');
+        const { formData, token } = buildDispatchForm();
+        setGenerating(true);
         fetch(route('dispatch.store'), {
             method: 'POST',
             body: formData,
-            headers: {
-                'X-CSRF-TOKEN': token,
-            }
+            // Accept JSON: los errores de validación llegan como 422 y no como una página descargada
+            headers: { 'X-CSRF-TOKEN': token, Accept: 'application/json' },
         })
             .then(response => {
                 if (response.ok) return response.blob();
-                // 422: estado no permitido o datos inválidos; el servidor explica el motivo
+                // 422: estado no permitido, Odoo sin respuesta o datos inválidos; el servidor explica el motivo
                 return response.json().catch(() => ({})).then(body => {
-                    throw new Error(body.message || 'No se pudo generar el archivo');
+                    const firstError = body.errors ? Object.values(body.errors)[0]?.[0] : null;
+                    throw new Error(firstError || body.message || 'No se pudo generar el archivo.');
                 });
             })
             .then(blob => {
@@ -249,15 +314,15 @@ export default function Dashboard({ messengers, dispatch_locations, beetrack_dat
                 document.body.appendChild(a);
                 a.click();
                 a.remove();
+                window.URL.revokeObjectURL(url);
 
-                // Clear form after success
                 reset();
-                if (document.querySelector('input[type="file"]')) {
-                    document.querySelector('input[type="file"]').value = '';
-                }
+                setBatch('');
+                setPreview(null);
                 setIsModalOpen(false);
             })
-            .catch(err => alert('Error: ' + err.message));
+            .catch(err => setSubmitError(err.message))
+            .finally(() => setGenerating(false));
     };
 
     const refreshNow = () => {
@@ -275,6 +340,11 @@ export default function Dashboard({ messengers, dispatch_locations, beetrack_dat
 
     const openAssignModal = (m) => {
         selectMessenger(m);
+        setBatch('');
+        setPreview(null);
+        setPreviewState({ loading: false, error: '' });
+        setSubmitError('');
+        setDtState(null);
         setIsModalOpen(true);
     };
 
@@ -506,65 +576,111 @@ export default function Dashboard({ messengers, dispatch_locations, beetrack_dat
                     </div>
                 )}
             </div>
-            {/* Dispatch Modal */}
-            <Modal show={isModalOpen} onClose={() => setIsModalOpen(false)}>
-                <form onSubmit={handleDispatchSubmit} className="p-6">
-                    <h2 className="text-lg font-medium text-slate-900 dark:text-slate-100">
-                        Procesar Ruta
-                    </h2>
-                    <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-                        Selecciona el archivo Excel y la sede para generar la ruta.
-                    </p>
-
-                    <div className="mt-6 space-y-4">
-                        <div>
-                            <InputLabel htmlFor="file" value="Archivo Excel" />
-                            <input
-                                type="file"
-                                id="file"
-                                onChange={(e) => setData('file', e.target.files[0])}
-                                className="mt-1 block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
-                                required
-                            />
-                        </div>
-
-                        <div>
-                            <InputLabel htmlFor="location_id" value="Sede de Despacho" />
-                            <SelectInput
-                                id="location_id"
-                                value={data.location_id}
-                                onChange={(e) => setData('location_id', e.target.value)}
-                                className="mt-1 block w-full"
-                                required
-                            >
-                                <option value="">Selecciona una sede</option>
-                                {dispatch_locations.map((loc) => (
-                                    <option key={loc.id} value={loc.id}>
-                                        {loc.name}
-                                    </option>
-                                ))}
-                            </SelectInput>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                            <input
-                                type="checkbox"
-                                id="last_route"
-                                checked={data.last_route}
-                                onChange={(e) => setData('last_route', e.target.checked)}
-                                className="rounded border-slate-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
-                            />
-                            <InputLabel htmlFor="last_route" value="¿Es la última ruta?" />
+            {/* Modal de ruta: guías desde un batch de Odoo o desde el Excel de respaldo */}
+            <Modal show={isModalOpen} onClose={() => !generating && setIsModalOpen(false)} maxWidth="2xl">
+                <form onSubmit={handleDispatchSubmit} className="flex flex-col max-h-[90vh]">
+                    <div className="px-6 pt-5 pb-4 border-b border-slate-200 dark:border-slate-700">
+                        <h2 className="text-lg font-black text-slate-900 dark:text-white">Procesar ruta</h2>
+                        <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-400">
+                            {localMessengers.find(m => m.id === data.messenger_id)?.name ?? 'Mensajero'} · genera el rutero para DispatchTrack.
+                        </p>
+                        <div role="tablist" className="mt-4 inline-flex p-1 rounded-xl bg-slate-100 dark:bg-slate-900">
+                            {[['odoo', 'Batch de Odoo'], ['excel', 'Subir Excel']].map(([key, label]) => (
+                                <button key={key} type="button" role="tab" aria-selected={source === key}
+                                    onClick={() => { setSource(key); setSubmitError(''); }}
+                                    className={`h-8 px-4 rounded-lg text-sm font-bold transition-colors ${source === key ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}>
+                                    {label}
+                                </button>
+                            ))}
                         </div>
                     </div>
 
-                    <div className="mt-6 flex justify-end gap-3">
-                        <SecondaryButton onClick={() => setIsModalOpen(false)}>
-                            Cancelar
+                    <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 py-5 space-y-5">
+                        {source === 'odoo' ? (
+                            <div>
+                                <InputLabel htmlFor="odoo_batch" value="Número de batch" />
+                                <div className="mt-1 flex gap-2">
+                                    <TextInput id="odoo_batch" className="flex-1" value={batch} placeholder="Ej. BATCH/01234 o 01234" autoComplete="off"
+                                        onChange={(e) => { setBatch(e.target.value); setPreview(null); setDtState(null); }}
+                                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); loadPreview(); } }} />
+                                    <button type="button" onClick={loadPreview} disabled={!batch.trim() || previewState.loading}
+                                        className="h-10 px-4 rounded-lg bg-slate-900 dark:bg-slate-600 hover:bg-slate-700 text-white text-sm font-bold disabled:opacity-50">
+                                        {previewState.loading ? 'Consultando…' : 'Consultar'}
+                                    </button>
+                                </div>
+                                <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">Solo consulta Odoo: no modifica el batch ni las entregas.</p>
+
+                                {previewState.error && (
+                                    <div className="mt-3 px-3 py-2.5 rounded-lg bg-rose-50 dark:bg-rose-900/20 text-sm text-rose-800 dark:text-rose-300">
+                                        {previewState.error}
+                                        <button type="button" onClick={() => setSource('excel')} className="ml-1 font-bold underline">Usar Excel</button>
+                                    </div>
+                                )}
+
+                                {preview && <BatchPreview preview={preview} />}
+                            </div>
+                        ) : (
+                            <div>
+                                <InputLabel htmlFor="file" value="Archivo Excel exportado de Odoo" />
+                                <input
+                                    type="file"
+                                    id="file"
+                                    accept=".xlsx,.xls"
+                                    onChange={(e) => setData('file', e.target.files[0])}
+                                    className="mt-1 block w-full text-sm text-slate-600 dark:text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                                    required={source === 'excel'}
+                                />
+                            </div>
+                        )}
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <InputLabel htmlFor="location_id" value="Sede de despacho" />
+                                <SelectInput id="location_id" value={data.location_id} onChange={(e) => setData('location_id', e.target.value)} className="mt-1 block w-full" required>
+                                    <option value="">Selecciona una sede</option>
+                                    {dispatch_locations.map((loc) => (
+                                        <option key={loc.id} value={loc.id}>{loc.name}</option>
+                                    ))}
+                                </SelectInput>
+                            </div>
+                            <label className="flex items-center gap-2 sm:mt-7">
+                                <input type="checkbox" id="last_route" checked={data.last_route} onChange={(e) => setData('last_route', e.target.checked)}
+                                    className="rounded border-slate-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
+                                <span className="text-sm text-slate-700 dark:text-slate-300">Es la última ruta (sin guía de retorno)</span>
+                            </label>
+                        </div>
+
+                        {submitError && (
+                            <div className="px-3 py-2.5 rounded-lg bg-rose-50 dark:bg-rose-900/20 text-sm text-rose-800 dark:text-rose-300">{submitError}</div>
+                        )}
+
+                        {dtState && (
+                            <DispatchTrackPanel
+                                state={dtState}
+                                summary={`${localMessengers.find(m => m.id === data.messenger_id)?.name ?? 'Mensajero'} (${localMessengers.find(m => m.id === data.messenger_id)?.vehicle ?? 'sin placa'}) · ${preview?.guides_count ?? 0} guías${data.last_route ? '' : ' + guía de retorno'}`}
+                                canSend={!!data.location_id}
+                                onConfirm={() => sendToDispatchTrack(false)}
+                                onForce={() => sendToDispatchTrack(true)}
+                                onCancel={() => setDtState(null)}
+                            />
+                        )}
+                    </div>
+
+                    <div className="px-6 py-4 flex justify-end gap-3 border-t border-slate-200 dark:border-slate-700">
+                        <SecondaryButton onClick={() => setIsModalOpen(false)} disabled={generating || dtState === 'sending'}>
+                            {dtState?.logId ? 'Cerrar' : 'Cancelar'}
                         </SecondaryButton>
-                        <PrimaryButton disabled={processing}>
-                            {processing ? 'Procesando...' : 'Generar Rutero'}
-                        </PrimaryButton>
+                        {!dtState?.logId && (
+                            <PrimaryButton disabled={generating || dtState === 'sending' || (source === 'odoo' && !preview)}>
+                                {generating ? 'Generando…' : dispatchtrack_create && source === 'odoo' ? 'Descargar Excel' : 'Generar rutero'}
+                            </PrimaryButton>
+                        )}
+                        {dispatchtrack_create && source === 'odoo' && !dtState && (
+                            <button type="button" disabled={!preview || generating || !data.location_id} onClick={() => setDtState('confirm')}
+                                className="px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-xs font-black uppercase tracking-widest">
+                                Crear en DispatchTrack
+                            </button>
+                        )}
                     </div>
                 </form>
             </Modal>
@@ -846,6 +962,101 @@ function CompactCard({ m, group, isSelected, onSelect, onAssign }) {
                 </span>
             </div>
             {onAssign && <AssignButton onAssign={onAssign} />}
+        </div>
+    );
+}
+
+// Resumen del batch consultado en Odoo antes de generar el rutero
+function BatchPreview({ preview }) {
+    return (
+        <div className="mt-4 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 bg-slate-50 dark:bg-slate-900/50 text-sm">
+                <span className="font-bold text-slate-900 dark:text-white">{preview.batch}</span>
+                <span className="text-slate-600 dark:text-slate-400">{preview.guides_count} guías · {preview.lines_count} productos</span>
+            </div>
+            {preview.warnings.length > 0 && (
+                <ul className="px-4 py-2.5 space-y-1 bg-amber-50 dark:bg-amber-900/20 border-y border-amber-200 dark:border-amber-800">
+                    {preview.warnings.map((w, i) => (
+                        <li key={i} className="text-[13px] text-amber-900 dark:text-amber-200">⚠ {w}</li>
+                    ))}
+                </ul>
+            )}
+            <div className="max-h-56 overflow-y-auto">
+                <table className="w-full text-[13px]">
+                    <thead className="sticky top-0 bg-white dark:bg-slate-800 text-left text-xs text-slate-500 dark:text-slate-400">
+                        <tr>
+                            <th className="px-4 py-2 font-semibold">Guía</th>
+                            <th className="px-2 py-2 font-semibold">Cliente</th>
+                            <th className="px-2 py-2 font-semibold hidden sm:table-cell">Ciudad</th>
+                            <th className="px-2 py-2 font-semibold text-right">Prod.</th>
+                            <th className="px-4 py-2 font-semibold">Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                        {preview.guides.map(g => (
+                            <tr key={g.guide}>
+                                <td className="px-4 py-2 font-mono font-semibold text-slate-900 dark:text-white whitespace-nowrap">
+                                    {g.guide}
+                                    {g.priority === 'Urgente' && <span className="ml-1.5 px-1.5 py-0.5 rounded bg-rose-100 dark:bg-rose-900/40 text-[11px] font-bold text-rose-700 dark:text-rose-300">Urgente</span>}
+                                </td>
+                                <td className="px-2 py-2 text-slate-700 dark:text-slate-300 max-w-[180px] truncate">{g.customer}</td>
+                                <td className="px-2 py-2 text-slate-600 dark:text-slate-400 hidden sm:table-cell">{g.city}</td>
+                                <td className="px-2 py-2 text-right tabular-nums text-slate-700 dark:text-slate-300">{g.lines}</td>
+                                <td className="px-4 py-2 text-slate-600 dark:text-slate-400">{g.state}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+}
+
+// Confirmación, advertencias y seguimiento de la ruta enviada a DispatchTrack
+function DispatchTrackPanel({ state, summary, canSend, onConfirm, onForce, onCancel }) {
+    const box = 'rounded-xl border px-4 py-3 text-sm';
+    if (state === 'confirm' || state === 'sending') {
+        const sending = state === 'sending';
+        return (
+            <div className={`${box} border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/20`}>
+                <p className="font-bold text-emerald-900 dark:text-emerald-200">¿Crear esta ruta en DispatchTrack?</p>
+                <p className="mt-0.5 text-emerald-900 dark:text-emerald-200">{summary}</p>
+                <p className="mt-1 text-xs text-emerald-800 dark:text-emerald-300">Se envía el mismo rutero que hoy se sube a mano. DispatchTrack lo procesa en segundo plano.</p>
+                {!canSend && <p className="mt-1 text-xs font-semibold text-rose-700 dark:text-rose-300">Selecciona la sede de despacho.</p>}
+                <div className="mt-3 flex gap-2">
+                    <button type="button" onClick={onConfirm} disabled={sending || !canSend} className="h-9 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-bold">
+                        {sending ? 'Enviando…' : 'Sí, crear ruta'}
+                    </button>
+                    <button type="button" onClick={onCancel} disabled={sending} className="h-9 px-3 rounded-lg text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-white/60 dark:hover:bg-slate-800">Volver</button>
+                </div>
+            </div>
+        );
+    }
+    if (state.duplicates) {
+        return (
+            <div className={`${box} border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20`}>
+                <p className="font-bold text-amber-900 dark:text-amber-200">Revisa antes de enviar</p>
+                <ul className="mt-1 space-y-0.5 text-amber-900 dark:text-amber-200">
+                    {state.duplicates.map((d, i) => <li key={i}>⚠ {d}</li>)}
+                </ul>
+                <div className="mt-3 flex gap-2">
+                    <button type="button" onClick={onForce} className="h-9 px-4 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold">Enviar de todas formas</button>
+                    <button type="button" onClick={onCancel} className="h-9 px-3 rounded-lg text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-white/60 dark:hover:bg-slate-800">Cancelar</button>
+                </div>
+            </div>
+        );
+    }
+    const tone = state.status === 'created'
+        ? 'border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-900 dark:text-emerald-200'
+        : state.status === 'not_found'
+            ? 'border-rose-300 dark:border-rose-700 bg-rose-50 dark:bg-rose-900/20 text-rose-900 dark:text-rose-200'
+            : 'border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/40 text-slate-800 dark:text-slate-200';
+    return (
+        <div className={`${box} ${tone}`} role="status" aria-live="polite">
+            <p className="font-bold">
+                {state.status === 'created' ? '✓ ' : state.status === 'not_found' ? '⚠ ' : '⏳ '}{state.message}
+            </p>
+            {state.routeId && <p className="mt-0.5 text-xs">Ruta {state.routeId}</p>}
         </div>
     );
 }

@@ -48,7 +48,11 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/messenger-status', [UnifiedController::class, 'getMessengerStatus'])->name('messenger.status');
         Route::get('/messenger-status-beetrack', [UnifiedController::class, 'getBeetrackAsync'])->name('messenger.status.beetrack');
     });
-    Route::post('/dispatch', [DispatchController::class, 'store'])->middleware('permission:dashboard.asignar_ruta')->name('dispatch.store');
+    Route::middleware(['permission:dashboard.asignar_ruta'])->group(function () {
+        Route::post('/dispatch', [DispatchController::class, 'store'])->name('dispatch.store');
+        Route::get('/dispatch/odoo-preview', [DispatchController::class, 'odooPreview'])->middleware('throttle:30,1')->name('dispatch.odoo-preview');
+        Route::get('/dispatch/{dispatchLog}/dispatchtrack', [DispatchController::class, 'dispatchTrackStatus'])->middleware('throttle:60,1')->name('dispatch.dispatchtrack-status');
+    });
 
     // 2. Almuerzo
     Route::middleware(['permission:almuerzo.ver'])->group(function () {

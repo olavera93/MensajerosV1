@@ -12,7 +12,7 @@ class Permissions
 {
     public const GROUPS = [
         'dashboard' => ['label' => 'Dashboard', 'icon' => '🏠', 'route' => 'dashboard', 'actions' => [
-            'ver' => 'Ver', 'asignar_ruta' => 'Asignar ruta',
+            'ver' => 'Ver', 'asignar_ruta' => 'Asignar ruta', 'crear_ruta_dt' => 'Crear ruta en DispatchTrack',
         ]],
         'horarios' => ['label' => 'Horarios', 'icon' => '🕒', 'route' => 'shifts.index', 'actions' => [
             'ver' => 'Ver', 'editar' => 'Crear, importar y eliminar', 'exportar' => 'Exportar',
@@ -57,6 +57,11 @@ class Permissions
         'external-forms.index' => 'formularios', 'users.index' => 'usuarios', 'procedures.index' => 'tramites',
     ];
 
+    /** Acciones que necesitan otra para funcionar (se agregan solas al otorgarlas). */
+    public const REQUIRES = [
+        'dashboard.crear_ruta_dt' => ['dashboard.asignar_ruta'],
+    ];
+
     public static function all(): array
     {
         $all = [];
@@ -74,11 +79,17 @@ class Permissions
     }
 
     /**
-     * Deja solo permisos válidos, sin duplicados, y agrega "ver" a cada módulo que tenga alguna acción.
+     * Deja solo permisos válidos, sin duplicados, y agrega "ver" a cada módulo que tenga alguna acción
+     * y las acciones que cada permiso necesita (REQUIRES).
      */
     public static function normalize(?array $permissions): array
     {
         $valid = array_values(array_intersect(array_unique($permissions ?? []), self::all()));
+        foreach (self::REQUIRES as $permission => $required) {
+            if (in_array($permission, $valid)) {
+                $valid = array_values(array_unique(array_merge($valid, $required)));
+            }
+        }
         foreach ($valid as $p) {
             $view = explode('.', $p)[0] . '.ver';
             if (!in_array($view, $valid)) {
@@ -104,7 +115,11 @@ class Permissions
             'label' => $def['label'],
             'icon' => $def['icon'],
             'route' => $def['route'],
-            'actions' => collect($def['actions'])->map(fn($label, $a) => ['key' => "$key.$a", 'label' => $label])->values(),
+            'actions' => collect($def['actions'])->map(fn($label, $a) => [
+                'key' => "$key.$a",
+                'label' => $label,
+                'requires' => self::REQUIRES["$key.$a"] ?? [],
+            ])->values(),
         ])->values()->all();
     }
 }

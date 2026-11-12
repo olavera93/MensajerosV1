@@ -27,6 +27,8 @@ class UnifiedController extends Controller
             'dispatch_locations' => DispatchLocation::all(),
             'beetrack_data' => null,
             'assignable_states' => \App\Support\MessengerStates::assignable(),
+            // Botón "Crear ruta en DispatchTrack": interruptor general + permiso del usuario
+            'dispatchtrack_create' => app(\App\Services\DispatchTrackRouteService::class)->enabled() && auth()->user()->hasPermission('dashboard.crear_ruta_dt'),
         ]);
     }
 
