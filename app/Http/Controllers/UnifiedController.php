@@ -26,6 +26,7 @@ class UnifiedController extends Controller
             'messengers' => $status['messengers'],
             'dispatch_locations' => DispatchLocation::all(),
             'beetrack_data' => null,
+            'assignable_states' => \App\Support\MessengerStates::assignable(),
         ]);
     }
 

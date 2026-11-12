@@ -5,37 +5,19 @@ import DataPurgeModal from '@/Components/DataPurgeModal';
 export default function LeaderLayout({ children, title, onPurgeClick }) {
     const { auth } = usePage().props;
 
-    const menuItems = [
-        { label: 'Dashboard', icon: '🏠', route: 'dashboard', active: route().current('dashboard'), roles: ['administrador', 'desarrollador', 'lider'] },
-        { label: 'Horarios', icon: '🕒', route: 'shifts.index', active: route().current('shifts.*'), roles: ['administrador', 'desarrollador'] },
-        { label: 'Preoperacional', icon: '📋', route: 'reports.preoperational', active: route().current('reports.preoperational'), roles: ['administrador', 'desarrollador', 'regente'] },
-        { label: 'Aseo', icon: '✨', route: 'reports.cleaning', active: route().current('reports.cleaning'), roles: ['administrador', 'desarrollador', 'regente'] },
-        { label: 'Estadísticas', icon: '📊', route: 'reports.global-stats', active: route().current('reports.global-stats'), roles: ['administrador', 'desarrollador', 'regente'] },
-        { label: 'Almuerzo', icon: '🍽️', route: 'reports.lunch', active: route().current('reports.lunch'), roles: ['administrador', 'desarrollador', 'lider'] },
-        { label: 'Salida', icon: '🏁', route: 'reports.exit', active: route().current('reports.exit'), roles: ['administrador', 'desarrollador'] },
-        { label: 'Formularios', icon: '📝', route: 'external-forms.index', active: route().current('external-forms.*'), roles: ['administrador', 'desarrollador'] },
-        { label: 'Mensajeros', icon: '🛵', route: 'messengers.index', active: route().current('messengers.*'), roles: ['administrador', 'desarrollador'] },
-        { label: 'Usuarios', icon: '👤', route: 'users.index', active: route().current('users.*'), roles: ['administrador', 'desarrollador'] },
-        { label: 'Trámites', icon: '💼', route: 'procedures.index', active: route().current('procedures.*'), roles: ['administrador', 'desarrollador'] },
-    ].filter(item => {
-        // El Desarrollador siempre tiene acceso a todo
-        if (auth.user.role === 'desarrollador') return true;
+    // Menú: los módulos que el usuario puede ver (catálogo compartido por el servidor)
+    const permissions = auth.user.permissions || [];
+    const menuItems = (auth.menu || [])
+        .filter(g => permissions.includes(`${g.key}.ver`))
+        .map(g => ({
+            label: g.label,
+            icon: g.icon,
+            route: g.route,
+            active: route().current(g.route.replace(/\.index$/, '') + '*'),
+        }));
 
-        // Para los demás roles, el acceso es dinámico por módulos asignados
-        return auth.user.modules && auth.user.modules.includes(item.route);
-    });
-
-    // Customize bottom nav items based on role
-    let bottomNavItems = [];
-    if (auth.user.role === 'administrador' || auth.user.role === 'desarrollador') {
-        bottomNavItems = [
-            menuItems.find(i => i.route === 'dashboard'),
-            menuItems.find(i => i.route === 'shifts.index'),
-            menuItems.find(i => i.route === 'messengers.index'),
-        ].filter(Boolean);
-    } else {
-        bottomNavItems = menuItems.slice(0, 4);
-    }
+    // Barra inferior en móvil: los primeros cuatro módulos disponibles
+    const bottomNavItems = menuItems.slice(0, 4);
 
     const logout = (e) => {
         e.preventDefault();
@@ -71,7 +53,7 @@ export default function LeaderLayout({ children, title, onPurgeClick }) {
             <nav className="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-[2000]">
                 <div className="max-w-[1800px] mx-auto px-4 h-14 sm:h-16 flex items-center justify-between">
                     {/* Brand */}
-                    <Link href={route('dashboard')} className="font-black text-base sm:text-xl tracking-tight text-indigo-400">
+                    <Link href={route(menuItems[0]?.route ?? 'landing')} className="font-black text-base sm:text-xl tracking-tight text-indigo-400">
                         LOGÍSTICA <span className="text-white">LFH</span>
                     </Link>
 
@@ -102,7 +84,7 @@ export default function LeaderLayout({ children, title, onPurgeClick }) {
                         </div>
 
                         {/* Purge button - desktop only */}
-                        {auth.user.role === 'desarrollador' && (
+                        {auth.user.is_developer && (
                             <button
                                 onClick={() => setShowPurgeModal(true)}
                                 className="hidden md:flex items-center gap-1.5 bg-slate-800 hover:bg-red-900/60 border border-red-800/40 text-red-400 hover:text-red-300 px-3 py-2 rounded-lg text-xs font-bold transition-colors duration-200"

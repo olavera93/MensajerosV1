@@ -2,8 +2,10 @@ import React from 'react';
 import { Head, Link, usePage, router } from '@inertiajs/react';
 import LeaderLayout from '@/Layouts/LeaderLayout';
 import DangerButton from '@/Components/DangerButton';
+import useCan from '@/hooks/useCan';
 
 export default function Index({ messengers, filters }) {
+    const can = useCan();
     const { flash } = usePage().props;
     const [search, setSearch] = React.useState(filters.search || '');
 
@@ -46,12 +48,14 @@ export default function Index({ messengers, filters }) {
                             />
                         </div>
 
-                        <Link
-                            href={route('messengers.create')}
-                            className="px-5 py-3 bg-indigo-600 text-white rounded-xl font-bold uppercase text-[10px] tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 dark:shadow-none active:scale-95 flex items-center justify-center gap-2"
-                        >
-                            <span>➕</span> Nuevo Mensajero
-                        </Link>
+                        {can('mensajeros.editar') && (
+                            <Link
+                                href={route('messengers.create')}
+                                className="px-5 py-3 bg-indigo-600 text-white rounded-xl font-bold uppercase text-[10px] tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 dark:shadow-none active:scale-95 flex items-center justify-center gap-2"
+                            >
+                                <span>➕</span> Nuevo Mensajero
+                            </Link>
+                        )}
                     </div>
                 </div>
 
@@ -107,18 +111,22 @@ export default function Index({ messengers, filters }) {
                                     </span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <Link
-                                        href={route('messengers.edit', messenger.id)}
-                                        className="px-3 py-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors hover:bg-indigo-100 dark:hover:bg-indigo-900/50 active:scale-95"
-                                    >
-                                        Editar
-                                    </Link>
-                                    <button
-                                        onClick={() => handleDelete(messenger.id)}
-                                        className="px-3 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors hover:bg-red-100 dark:hover:bg-red-900/40 active:scale-95"
-                                    >
-                                        Eliminar
-                                    </button>
+                                    {can('mensajeros.editar') && (
+                                        <Link
+                                            href={route('messengers.edit', messenger.id)}
+                                            className="px-3 py-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors hover:bg-indigo-100 dark:hover:bg-indigo-900/50 active:scale-95"
+                                        >
+                                            Editar
+                                        </Link>
+                                    )}
+                                    {can('mensajeros.eliminar') && (
+                                        <button
+                                            onClick={() => handleDelete(messenger.id)}
+                                            className="px-3 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors hover:bg-red-100 dark:hover:bg-red-900/40 active:scale-95"
+                                        >
+                                            Eliminar
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -170,18 +178,22 @@ export default function Index({ messengers, filters }) {
                                             {messenger.location}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                            <Link
-                                                href={route('messengers.edit', messenger.id)}
-                                                className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-900 font-bold uppercase text-[10px] tracking-widest mr-4 transition-colors"
-                                            >
-                                                EDITAR
-                                            </Link>
-                                            <button
-                                                onClick={() => handleDelete(messenger.id)}
-                                                className="text-red-600 dark:text-red-400 hover:text-red-900 font-bold uppercase text-[10px] tracking-widest transition-colors"
-                                            >
-                                                ELIMINAR
-                                            </button>
+                                            {can('mensajeros.editar') && (
+                                                <Link
+                                                    href={route('messengers.edit', messenger.id)}
+                                                    className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-900 font-bold uppercase text-[10px] tracking-widest mr-4 transition-colors"
+                                                >
+                                                    EDITAR
+                                                </Link>
+                                            )}
+                                            {can('mensajeros.eliminar') && (
+                                                <button
+                                                    onClick={() => handleDelete(messenger.id)}
+                                                    className="text-red-600 dark:text-red-400 hover:text-red-900 font-bold uppercase text-[10px] tracking-widest transition-colors"
+                                                >
+                                                    ELIMINAR
+                                                </button>
+                                            )}
                                         </td>
                                     </tr>
                                 ))}

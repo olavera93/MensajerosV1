@@ -8,6 +8,7 @@ import PrimaryButton from '@/Components/PrimaryButton';
 import SecondaryButton from '@/Components/SecondaryButton';
 import Modal from '@/Components/Modal';
 import { toast } from 'sonner';
+import useCan from '@/hooks/useCan';
 
 const getPriority = (status) => {
     const s = String(status || '').toLowerCase();
@@ -18,7 +19,11 @@ const getPriority = (status) => {
     return 10;
 };
 
-export default function Dashboard({ messengers, dispatch_locations, beetrack_data }) {
+export default function Dashboard({ messengers, dispatch_locations, beetrack_data, assignable_states = [] }) {
+    const can = useCan();
+    // Grupo del tablero → estado configurable en Configuración
+    const STATE_OF_GROUP = { disponibles: 'disponible', ruta: 'ruta', almuerzo: 'almuerzo', 'por-iniciar': 'por-iniciar', finalizados: 'finalizado' };
+    const canAssignIn = (group) => can('dashboard.asignar_ruta') && assignable_states.includes(STATE_OF_GROUP[group]);
     const { data, setData, submit, processing, errors, reset } = useForm({
         file: null,
         location_id: '',
@@ -231,7 +236,10 @@ export default function Dashboard({ messengers, dispatch_locations, beetrack_dat
         })
             .then(response => {
                 if (response.ok) return response.blob();
-                throw new Error('Error generador archivo');
+                // 422: estado no permitido o datos inválidos; el servidor explica el motivo
+                return response.json().catch(() => ({})).then(body => {
+                    throw new Error(body.message || 'No se pudo generar el archivo');
+                });
             })
             .then(blob => {
                 const url = window.URL.createObjectURL(blob);
@@ -303,18 +311,19 @@ export default function Dashboard({ messengers, dispatch_locations, beetrack_dat
     const updatedAgo = Math.max(0, Math.round((now - lastUpdated.getTime()) / 1000));
     const toggleState = (key) => setStateFilter(prev => prev === key ? null : key);
 
-    const cardProps = (m) => ({
+    const cardProps = (m, group) => ({
         m,
         now,
         isSelected: data.messenger_id === m.id,
         onSelect: () => selectMessenger(m),
-        onAssign: () => openAssignModal(m),
+        // Sin botón si el usuario no puede asignar o el estado no lo permite
+        onAssign: m.in_dispatchtrack && canAssignIn(group) ? () => openAssignModal(m) : null,
     });
     const renderCard = (m, group) => {
-        if (group === 'disponibles') return <AvailableCard key={m.id} {...cardProps(m)} idle={availableSince[m.id]} next={m.id === nextId} />;
-        if (group === 'ruta') return <RouteCard key={m.id} {...cardProps(m)} alert={alertsById[m.id]} activity={routeActivity[m.id]} />;
-        if (group === 'almuerzo') return <LunchCard key={m.id} {...cardProps(m)} />;
-        return <CompactCard key={m.id} {...cardProps(m)} group={group} />;
+        if (group === 'disponibles') return <AvailableCard key={m.id} {...cardProps(m, group)} idle={availableSince[m.id]} next={m.id === nextId} />;
+        if (group === 'ruta') return <RouteCard key={m.id} {...cardProps(m, group)} alert={alertsById[m.id]} activity={routeActivity[m.id]} />;
+        if (group === 'almuerzo') return <LunchCard key={m.id} {...cardProps(m, group)} />;
+        return <CompactCard key={m.id} {...cardProps(m, group)} group={group} />;
     };
 
     const routeLimit = 8;
@@ -755,7 +764,7 @@ function AvailableCard({ m, now, idle, next, isSelected, onSelect, onAssign }) {
                     <span className="text-xs text-slate-600 dark:text-slate-400">{m.shift_end ? `${leftMs > 0 ? 'hasta' : 'a las'} ${fmtTime(m.shift_end)}` : 'sin turno'}</span>
                 </div>
             </div>
-            <AssignButton onAssign={onAssign} primary />
+            {onAssign && <AssignButton onAssign={onAssign} primary />}
         </div>
     );
 }
@@ -790,7 +799,7 @@ function RouteCard({ m, now, alert, activity, isSelected, onSelect, onAssign }) 
             )}
             <div className="flex items-center justify-between gap-2">
                 <span className="text-[13px] text-slate-600 dark:text-slate-400">{meta}</span>
-                <AssignButton onAssign={onAssign} />
+                {onAssign && <AssignButton onAssign={onAssign} />}
             </div>
         </div>
     );
@@ -815,7 +824,7 @@ function LunchCard({ m, now, isSelected, onSelect, onAssign }) {
                         <span className="text-xs text-slate-600 dark:text-slate-400">restantes</span>
                     </span>
                 )}
-                {m.in_dispatchtrack && <AssignButton onAssign={onAssign} />}
+                {onAssign && <AssignButton onAssign={onAssign} />}
             </div>
             <div className="h-1.5 rounded-full bg-amber-100 dark:bg-amber-900/30 overflow-hidden">
                 <div className="h-full rounded-full bg-amber-500" style={{ width: `${pct}%` }} />
@@ -836,7 +845,7 @@ function CompactCard({ m, group, isSelected, onSelect, onAssign }) {
                     {finished ? `Cerró a las ${m.finished_info?.hora_cierre ?? ''}` : `Turno inicia ${fmtTime(m.shift_start)}`}
                 </span>
             </div>
-            {!finished && m.in_dispatchtrack && <AssignButton onAssign={onAssign} />}
+            {onAssign && <AssignButton onAssign={onAssign} />}
         </div>
     );
 }

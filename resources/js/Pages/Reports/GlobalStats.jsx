@@ -3,8 +3,10 @@ import LeaderLayout from '@/Layouts/LeaderLayout';
 import { Head } from '@inertiajs/react';
 import TextInput from '@/Components/TextInput';
 import MessengerSearchSelect from '@/Components/MessengerSearchSelect';
+import useCan from '@/hooks/useCan';
 
 export default function GlobalStats({ filters, messengers }) {
+    const can = useCan();
     const [startDate, setStartDate] = useState(filters?.start_date || '');
     const [endDate, setEndDate] = useState(filters?.end_date || '');
     const [messengerId, setMessengerId] = useState(filters?.messenger_id || '');
@@ -76,24 +78,26 @@ export default function GlobalStats({ filters, messengers }) {
                                     className="border-none bg-transparent dark:text-white text-xs focus:ring-0 py-1 shadow-none" />
                             </div>
 
-                            <button
-                                onClick={() => {
-                                    const params = new URLSearchParams({
-                                        start_date: startDate,
-                                        end_date: endDate,
-                                        messenger_id: messengerId
-                                    });
-                                    window.location.href = `${route('reports.global-stats.export')}?${params}`;
-                                }}
-                                className="flex items-center gap-2.5 bg-[#009164] hover:bg-[#007b55] text-white text-[11px] font-black uppercase tracking-widest px-7 py-3 rounded-full transition-all shadow-[0_4px_14px_0_rgba(0,145,100,0.39)] group"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-white stroke-[2.5]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                    <polyline points="7 10 12 15 17 10" />
-                                    <line x1="12" y1="15" x2="12" y2="3" />
-                                </svg>
-                                EXPORTAR
-                            </button>
+                            {can('estadisticas.exportar') && (
+                                <button
+                                    onClick={() => {
+                                        const params = new URLSearchParams({
+                                            start_date: startDate,
+                                            end_date: endDate,
+                                            messenger_id: messengerId
+                                        });
+                                        window.location.href = `${route('reports.global-stats.export')}?${params}`;
+                                    }}
+                                    className="flex items-center gap-2.5 bg-[#009164] hover:bg-[#007b55] text-white text-[11px] font-black uppercase tracking-widest px-7 py-3 rounded-full transition-all shadow-[0_4px_14px_0_rgba(0,145,100,0.39)] group"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-white stroke-[2.5]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                        <polyline points="7 10 12 15 17 10" />
+                                        <line x1="12" y1="15" x2="12" y2="3" />
+                                    </svg>
+                                    EXPORTAR
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>

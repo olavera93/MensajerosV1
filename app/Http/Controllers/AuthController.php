@@ -35,16 +35,8 @@ class AuthController extends Controller
             RateLimiter::clear($throttleKey);
             $request->session()->regenerate();
             \Log::info('Login Success');
-            if (in_array(Auth::user()->role, ['administrador', 'desarrollador', 'lider'])) {
-                return redirect()->intended(route('dashboard'));
-            }
-
-            if (Auth::user()->role === 'regente') {
-                return redirect()->intended(route('reports.preoperational'));
-            }
-
-            // Fallback for anyone else
-            return redirect()->intended(route('landing'));
+            // Al primer módulo que pueda ver; sin permisos, a la pantalla de mensajeros
+            return redirect()->intended(route(Auth::user()->homeRoute()));
         }
 
         RateLimiter::hit($throttleKey, 60);

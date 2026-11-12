@@ -1,314 +1,357 @@
-import React, { useState } from 'react';
-import { Head, router, useForm } from '@inertiajs/react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Head, router, useForm, usePage } from '@inertiajs/react';
 import LeaderLayout from '@/Layouts/LeaderLayout';
-import Modal from '@/Components/Modal';
-import PrimaryButton from '@/Components/PrimaryButton';
-import SecondaryButton from '@/Components/SecondaryButton';
-import TextInput from '@/Components/TextInput';
-import SelectInput from '@/Components/SelectInput';
-import InputLabel from '@/Components/InputLabel';
 import InputError from '@/Components/InputError';
 
-export default function UserIndex({ users, assignableRoles = [], grantableModules = [] }) {
-    const [showModal, setShowModal] = useState(false);
-    const [editingUser, setEditingUser] = useState(null);
-    const { data: form, setData: setForm, post, put, processing, errors, clearErrors, reset } = useForm({
-        name: '',
-        email: '',
-        password: '',
-        role: 'lider',
-        modules: [],
-    });
+export default function UserIndex({ users, catalog = [], grantable = [], canCreate = false }) {
+    const { flash } = usePage().props;
+    const [search, setSearch] = useState('');
+    const [editor, setEditor] = useState(null); // null | { user } (user null = nuevo)
 
-    const AVAILABLE_MODULES = [
-        { id: 'dashboard', label: 'Dashboard', icon: '🏠' },
-        { id: 'shifts.index', label: 'Horarios', icon: '🕒' },
-        { id: 'reports.preoperational', label: 'Preoperacional', icon: '📋' },
-        { id: 'reports.cleaning', label: 'Aseo', icon: '✨' },
-        { id: 'reports.global-stats', label: 'Estadísticas Globales', icon: '📊' },
-        { id: 'reports.lunch', label: 'Almuerzo', icon: '🍽️' },
-        { id: 'reports.exit', label: 'Salida', icon: '🏁' },
-        { id: 'external-forms.index', label: 'Formularios', icon: '📝' },
-        { id: 'messengers.index', label: 'Mensajeros', icon: '🛵' },
-        { id: 'users.index', label: 'Usuarios', icon: '👤' },
-        { id: 'procedures.index', label: 'Trámites', icon: '💼' },
-    ];
-
-    const openModal = (user = null) => {
-        clearErrors();
-        if (user) {
-            setEditingUser(user);
-            setForm('name', user.name);
-            setForm('email', user.email);
-            setForm('password', '');
-            setForm('role', user.role);
-            setForm('modules', user.modules || []);
-        } else {
-            setEditingUser(null);
-            reset();
-        }
-        setShowModal(true);
-    };
-
-    const isSelf = !!editingUser?.is_self;
-
-    const handleModuleToggle = (moduleId) => {
-        const currentModules = [...form.modules];
-        if (currentModules.includes(moduleId)) {
-            setForm('modules', currentModules.filter(id => id !== moduleId));
-        } else {
-            setForm('modules', [...currentModules, moduleId]);
-        }
-    };
-
-    const submit = (e) => {
-        e.preventDefault();
-        if (editingUser) {
-            put(route('users.update', editingUser.id), {
-                onSuccess: () => setShowModal(false),
-            });
-        } else {
-            post(route('users.store'), {
-                onSuccess: () => setShowModal(false),
-            });
-        }
-    };
+    const term = search.trim().toLowerCase();
+    const visible = users.filter(u => !term || u.name.toLowerCase().includes(term) || u.email.toLowerCase().includes(term));
 
     const deleteUser = (user) => {
-        if (confirm(`¿Estás seguro de eliminar a ${user.name}?`)) {
-            router.delete(route('users.destroy', user.id), {
-                onSuccess: (page) => {
-                    if (page.props.flash?.error) alert(page.props.flash.error);
-                },
-            });
+        if (confirm(`¿Eliminar a ${user.name}? Esta acción no se puede deshacer.`)) {
+            router.delete(route('users.destroy', user.id), { preserveScroll: true });
         }
     };
 
     return (
-        <LeaderLayout title="Gestión de Usuarios">
-            <Head title="Gestión de Usuarios" />
+        <LeaderLayout title="Usuarios">
+            <Head title="Usuarios" />
 
-            <div className="max-w-[1800px] mx-auto p-3 sm:p-6 lg:p-8">
-                <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
-                    <h1 className="text-xl sm:text-2xl font-black text-slate-800 dark:text-slate-100 tracking-tight">Gestión de Usuarios</h1>
-                    <button
-                        onClick={() => openModal()}
-                        className="w-full lg:w-auto px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-bold uppercase text-[10px] tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 dark:shadow-none active:scale-95 flex items-center justify-center gap-2"
-                    >
-                        <span>➕</span> Nuevo Usuario
-                    </button>
+            <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+                {/* Encabezado */}
+                <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
+                    <div>
+                        <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Usuarios</h1>
+                        <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+                            {users.length} {users.length === 1 ? 'usuario' : 'usuarios'} · quién entra a la plataforma y qué puede hacer en cada módulo
+                        </p>
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                        <div className="relative">
+                            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                            <input
+                                type="search"
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                placeholder="Buscar por nombre o correo"
+                                aria-label="Buscar usuarios"
+                                className="h-10 w-full sm:w-72 pl-9 pr-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-indigo-500 focus:ring-indigo-500"
+                            />
+                        </div>
+                        {canCreate && (
+                            <button
+                                type="button"
+                                onClick={() => setEditor({ user: null })}
+                                className="h-10 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold shadow-sm inline-flex items-center justify-center gap-2 whitespace-nowrap"
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" d="M12 5v14M5 12h14" /></svg>
+                                Nuevo usuario
+                            </button>
+                        )}
+                    </div>
                 </div>
 
-                <div className="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                            <thead className="bg-gray-50 dark:bg-gray-700">
-                                <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                        Nombre
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                        Email
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                        Rol
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                        Módulos
-                                    </th>
-                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                        Acciones
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                {users.map((user) => (
-                                    <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                                            {user.name}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 font-mono">
-                                            {user.email}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                            <span className="px-2 inline-flex text-[10px] leading-5 font-black uppercase tracking-widest rounded-full border bg-indigo-100 text-indigo-800 border-indigo-200 dark:bg-indigo-900/40 dark:text-indigo-300 dark:border-indigo-800">
-                                                {user.role}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 text-sm">
-                                            <div className="flex flex-wrap gap-1 max-w-xs">
-                                                {user.modules && user.modules.length > 0 ? (
-                                                    user.modules.map(modId => {
-                                                        const mod = AVAILABLE_MODULES.find(m => m.id === modId);
-                                                        return mod ? (
-                                                            <span key={modId} className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded text-[9px] font-bold uppercase tracking-tighter" title={mod.label}>
-                                                                {mod.icon}
-                                                            </span>
-                                                        ) : null;
-                                                    })
-                                                ) : (
-                                                    <span className="text-gray-400 italic text-[10px]">Por defecto</span>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                            <div className="flex justify-end gap-3">
-                                                {user.manageable ? (
-                                                    <button
-                                                        onClick={() => openModal(user)}
-                                                        className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-900 font-bold uppercase text-[10px] tracking-widest transition-colors"
-                                                        title="Editar Usuario"
-                                                    >
-                                                        EDITAR
-                                                    </button>
-                                                ) : (
-                                                    <span className="text-gray-300 dark:text-gray-600 text-[10px] font-bold uppercase tracking-widest" title="Solo puedes administrar usuarios de un rol inferior">
-                                                        Sin permiso
-                                                    </span>
-                                                )}
-                                                {user.manageable && !user.is_self && (
-                                                    <button
-                                                        onClick={() => deleteUser(user)}
-                                                        className="text-red-600 dark:text-red-400 hover:text-red-900 font-bold uppercase text-[10px] tracking-widest transition-colors"
-                                                        title="Eliminar Usuario"
-                                                    >
-                                                        ELIMINAR
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                {flash?.error && (
+                    <div className="mb-4 px-4 py-3 rounded-xl bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 text-sm font-semibold text-rose-800 dark:text-rose-300">{flash.error}</div>
+                )}
+                {flash?.success && (
+                    <div className="mb-4 px-4 py-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 text-sm font-semibold text-emerald-800 dark:text-emerald-300">{flash.success}</div>
+                )}
+
+                {/* Tarjetas de usuario */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4">
+                    {visible.map(user => (
+                        <UserCard key={user.id} user={user} catalog={catalog} onEdit={() => setEditor({ user })} onDelete={() => deleteUser(user)} />
+                    ))}
+                </div>
+                {visible.length === 0 && (
+                    <p className="py-16 text-center text-sm text-slate-500 dark:text-slate-400">Ningún usuario coincide con “{search}”.</p>
+                )}
+            </div>
+
+            {editor && (
+                <UserEditor
+                    user={editor.user}
+                    users={users}
+                    catalog={catalog}
+                    grantable={grantable}
+                    onClose={() => setEditor(null)}
+                />
+            )}
+        </LeaderLayout>
+    );
+}
+
+function Avatar({ name, developer }) {
+    const initials = name.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase();
+    return (
+        <span className={`shrink-0 w-11 h-11 rounded-full flex items-center justify-center text-white text-sm font-black ${developer ? 'bg-violet-600' : 'bg-indigo-600'}`}>
+            {initials}
+        </span>
+    );
+}
+
+function UserCard({ user, catalog, onEdit, onDelete }) {
+    const modules = catalog
+        .filter(g => user.is_developer || user.permissions.includes(`${g.key}.ver`))
+        .map(g => {
+            const granted = user.is_developer ? g.actions.length : g.actions.filter(a => user.permissions.includes(a.key)).length;
+            return { ...g, granted, full: granted === g.actions.length };
+        });
+
+    return (
+        <article className="flex flex-col rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm">
+            <div className="flex items-center gap-3 p-4 pb-3">
+                <Avatar name={user.name} developer={user.is_developer} />
+                <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                        <h2 className="text-[15px] font-bold text-slate-900 dark:text-white truncate">{user.name}</h2>
+                        {user.is_self && <span className="shrink-0 px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">Tú</span>}
+                        {user.is_developer && <span className="shrink-0 px-2 py-0.5 rounded-full text-[11px] font-bold bg-violet-100 dark:bg-violet-900/40 text-violet-800 dark:text-violet-300">Desarrollador</span>}
                     </div>
+                    <p className="text-[13px] text-slate-600 dark:text-slate-400 truncate">{user.email}</p>
                 </div>
             </div>
 
-            <Modal show={showModal} onClose={() => setShowModal(false)} maxWidth="2xl">
-                <div className="p-6">
-                    <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-6 uppercase tracking-tight">
-                        {editingUser ? 'Actualizar Usuario' : 'Crear Nuevo Usuario'}
-                    </h2>
+            <div className="flex-1 px-4 pb-4">
+                <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">
+                    {user.is_developer ? 'Acceso total' : modules.length === 0 ? 'Sin accesos' : `${modules.length} ${modules.length === 1 ? 'módulo' : 'módulos'}`}
+                </p>
+                {!user.is_developer && modules.length > 0 && (
+                    <ul className="flex flex-wrap gap-1.5">
+                        {modules.map(g => (
+                            <li
+                                key={g.key}
+                                title={`${g.label}: ${g.actions.filter(a => user.permissions.includes(a.key)).map(a => a.label).join(', ')}`}
+                                className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-semibold ${g.full
+                                    ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-200'
+                                    : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200'}`}
+                            >
+                                <span aria-hidden="true">{g.icon}</span>
+                                {g.label}
+                                {!g.full && <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">{g.granted}/{g.actions.length}</span>}
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </div>
 
-                    <form onSubmit={submit} className="space-y-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <InputLabel htmlFor="name" value="Nombre" />
-                                <TextInput
-                                    id="name"
-                                    className="mt-1 block w-full"
-                                    value={form.name}
-                                    onChange={(e) => setForm('name', e.target.value)}
-                                    required
-                                />
-                                <InputError message={errors.name} className="mt-2" />
-                            </div>
+            <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-slate-100 dark:border-slate-700">
+                {!user.manageable && (
+                    <span className="mr-auto inline-flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400" title="Solo administras usuarios cuyos permisos también tienes">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 018 0v4" /></svg>
+                        Sin permiso para editar
+                    </span>
+                )}
+                {user.deletable && (
+                    <button type="button" onClick={onDelete} className="h-9 px-3 rounded-lg text-sm font-semibold text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20">
+                        Eliminar
+                    </button>
+                )}
+                {user.manageable && (
+                    <button type="button" onClick={onEdit} className="h-9 px-4 rounded-lg border border-slate-300 dark:border-slate-600 text-sm font-bold text-slate-800 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-700">
+                        {user.is_self ? 'Editar mis datos' : 'Editar'}
+                    </button>
+                )}
+            </div>
+        </article>
+    );
+}
 
-                            <div>
-                                <InputLabel htmlFor="email" value="Email" />
-                                <TextInput
-                                    id="email"
-                                    type="email"
-                                    className="mt-1 block w-full"
-                                    value={form.email}
-                                    onChange={(e) => setForm('email', e.target.value)}
-                                    required
-                                />
-                                <InputError message={errors.email} className="mt-2" />
-                            </div>
-                        </div>
+// Panel lateral: datos de la cuenta arriba, permisos por módulo abajo, acciones fijas al pie
+function UserEditor({ user, users, catalog, grantable, onClose }) {
+    const isNew = !user;
+    const locked = !!user && (user.is_self || user.is_developer);
+    const firstInput = useRef(null);
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <InputLabel htmlFor="password" value={editingUser ? 'Contraseña (Opcional)' : 'Contraseña'} />
-                                <TextInput
-                                    id="password"
-                                    type="password"
-                                    className="mt-1 block w-full"
-                                    value={form.password}
-                                    onChange={(e) => setForm('password', e.target.value)}
-                                    required={!editingUser}
-                                />
-                                <InputError message={errors.password} className="mt-2" />
-                            </div>
+    const { data, setData, post, put, processing, errors } = useForm({
+        name: user?.name ?? '',
+        email: user?.email ?? '',
+        password: '',
+        permissions: user?.permissions ?? [],
+    });
 
-                            <div>
-                                <InputLabel htmlFor="role" value="Rol Base" />
-                                {isSelf ? (
-                                    <p className="mt-1 px-3 py-2 rounded-md bg-slate-50 dark:bg-gray-700 text-sm text-slate-600 dark:text-slate-300">
-                                        {form.role} · no puedes cambiar tu propio rol
-                                    </p>
-                                ) : (
-                                <SelectInput
-                                    id="role"
-                                    className="mt-1 block w-full"
-                                    value={form.role}
-                                    onChange={(e) => setForm('role', e.target.value)}
-                                    required
-                                >
-                                    {[
-                                        ['administrador', 'Administrador'],
-                                        ['desarrollador', 'Desarrollador'],
-                                        ['lider', 'Líder'],
-                                        ['regente', 'Regente'],
-                                    ]
-                                        .filter(([value]) => assignableRoles.includes(value))
-                                        .map(([value, label]) => (
-                                            <option key={value} value={value}>{label}</option>
-                                        ))}
-                                </SelectInput>
-                                )}
-                                <InputError message={errors.role} className="mt-2" />
-                            </div>
-                        </div>
+    useEffect(() => {
+        firstInput.current?.focus();
+        const onKey = (e) => e.key === 'Escape' && onClose();
+        document.addEventListener('keydown', onKey);
+        const overflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = overflow; };
+    }, []);
 
-                        {!isSelf && (
-                        <div className="border-t border-gray-100 dark:border-gray-700 pt-6">
-                            <InputLabel value="Habilitar Accesos Manuales" className="mb-4" />
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                {AVAILABLE_MODULES.filter((mod) => grantableModules.includes(mod.id)).map((mod) => (
-                                    <button
-                                        key={mod.id}
-                                        type="button"
-                                        onClick={() => handleModuleToggle(mod.id)}
-                                        className={`
-                                            relative flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all group
-                                            ${form.modules.includes(mod.id)
-                                                ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
-                                                : 'border-slate-100 dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 text-slate-400'}
-                                        `}
-                                    >
-                                        <span className={`text-xl mb-1 transition-transform ${form.modules.includes(mod.id) ? 'scale-110' : 'group-hover:scale-110'}`}>
-                                            {mod.icon}
-                                        </span>
-                                        <span className="text-[9px] font-black uppercase tracking-tight text-center leading-none">
-                                            {mod.label}
-                                        </span>
-                                        {form.modules.includes(mod.id) && (
-                                            <div className="absolute top-1 right-1 w-2 h-2 bg-indigo-500 rounded-full" />
-                                        )}
-                                    </button>
-                                ))}
-                            </div>
-                            <InputError message={errors.modules || Object.entries(errors).find(([k]) => k.startsWith('modules.'))?.[1]} className="mt-2" />
-                            <p className="mt-3 text-[10px] text-slate-400 italic">
-                                * Nota: Si selecciona módulos aquí, estos serán los únicos accesibles para el usuario, ignorando los permisos por defecto de su rol. Solo puedes otorgar módulos a los que tú tienes acceso.
-                            </p>
-                        </div>
-                        )}
+    // Solo módulos y acciones que quien edita puede otorgar
+    const groups = useMemo(() => catalog
+        .map(g => ({ ...g, actions: g.actions.filter(a => grantable.includes(a.key)) }))
+        .filter(g => g.actions.length > 0), [catalog, grantable]);
+    const allKeys = groups.flatMap(g => g.actions.map(a => a.key));
 
-                        <div className="flex items-center justify-end mt-6 gap-3">
-                            <SecondaryButton onClick={() => setShowModal(false)}>
-                                Cancelar
-                            </SecondaryButton>
-                            <PrimaryButton disabled={processing}>
-                                {editingUser ? 'Actualizar' : 'Crear'}
-                            </PrimaryButton>
-                        </div>
-                    </form>
+    const has = (key) => data.permissions.includes(key);
+    const setPerms = (list) => setData('permissions', [...new Set(list)]);
+
+    const toggleAction = (g, key) => {
+        const view = `${g.key}.ver`;
+        if (has(key)) {
+            // Quitar "Ver" quita todo el módulo
+            setPerms(key === view ? data.permissions.filter(p => !p.startsWith(`${g.key}.`)) : data.permissions.filter(p => p !== key));
+        } else {
+            // Cualquier acción incluye "Ver"
+            setPerms([...data.permissions, key, view]);
+        }
+    };
+    const toggleModule = (g) => {
+        const keys = g.actions.map(a => a.key);
+        setPerms(has(`${g.key}.ver`) ? data.permissions.filter(p => !keys.includes(p)) : [...data.permissions, ...keys]);
+    };
+    const copyFrom = (id) => {
+        const source = users.find(u => String(u.id) === id);
+        if (source) setPerms(source.permissions.filter(p => grantable.includes(p)));
+    };
+
+    const submit = (e) => {
+        e.preventDefault();
+        const options = { preserveScroll: true, onSuccess: onClose };
+        isNew ? post(route('users.store'), options) : put(route('users.update', user.id), options);
+    };
+
+    const permissionError = errors.permissions || Object.entries(errors).find(([k]) => k.startsWith('permissions.'))?.[1];
+    const grantedCount = data.permissions.filter(p => allKeys.includes(p)).length;
+
+    return createPortal(
+        <div className="fixed inset-0 z-[3000] flex justify-end" role="dialog" aria-modal="true" aria-labelledby="user-editor-title">
+            <div className="absolute inset-0 bg-slate-900/50" onClick={onClose} />
+
+            <form onSubmit={submit} className="relative w-full max-w-2xl h-full flex flex-col bg-slate-50 dark:bg-slate-900 shadow-2xl">
+                {/* Encabezado */}
+                <div className="flex items-center gap-3 px-5 sm:px-6 py-4 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+                    <div className="flex-1 min-w-0">
+                        <h2 id="user-editor-title" className="text-lg font-black text-slate-900 dark:text-white truncate">
+                            {isNew ? 'Nuevo usuario' : user.is_self ? 'Mis datos' : user.name}
+                        </h2>
+                        <p className="text-[13px] text-slate-600 dark:text-slate-400">
+                            {isNew ? 'Crea la cuenta y elige qué puede hacer.' : 'Datos de la cuenta y permisos.'}
+                        </p>
+                    </div>
+                    <button type="button" onClick={onClose} aria-label="Cerrar" className="w-9 h-9 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" d="M6 6l12 12M18 6L6 18" /></svg>
+                    </button>
                 </div>
-            </Modal>
-        </LeaderLayout>
+
+                <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5 space-y-6">
+                    {/* Cuenta */}
+                    <section className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4 sm:p-5">
+                        <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-4">Cuenta</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <Field label="Nombre" error={errors.name}>
+                                <input ref={firstInput} value={data.name} onChange={(e) => setData('name', e.target.value)} required className={inputClass} />
+                            </Field>
+                            <Field label="Correo" error={errors.email}>
+                                <input type="email" value={data.email} onChange={(e) => setData('email', e.target.value)} required className={inputClass} />
+                            </Field>
+                            <div className="sm:col-span-2">
+                                <Field label="Contraseña" hint={isNew ? 'Mínimo 8 caracteres.' : 'Déjala vacía para conservar la actual.'} error={errors.password}>
+                                    <input type="password" value={data.password} onChange={(e) => setData('password', e.target.value)} required={isNew} autoComplete="new-password" className={inputClass} />
+                                </Field>
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* Permisos */}
+                    <section>
+                        <div className="flex flex-wrap items-end justify-between gap-3 mb-3">
+                            <div>
+                                <h3 className="text-sm font-bold text-slate-900 dark:text-white">Permisos</h3>
+                                {!locked && <p className="text-[13px] text-slate-600 dark:text-slate-400">{grantedCount} de {allKeys.length} activos · cualquier acción incluye “Ver”</p>}
+                            </div>
+                            {!locked && (
+                                <div className="flex items-center gap-2">
+                                    <select value="" onChange={(e) => copyFrom(e.target.value)} aria-label="Copiar permisos de otro usuario"
+                                        className="h-9 pl-3 pr-8 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-[13px] text-slate-700 dark:text-slate-200 focus:border-indigo-500 focus:ring-indigo-500">
+                                        <option value="">Copiar de…</option>
+                                        {users.filter(u => u.id !== user?.id && !u.is_developer).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                                    </select>
+                                    <button type="button" onClick={() => setPerms(allKeys)} className={ghostButton}>Todos</button>
+                                    <button type="button" onClick={() => setPerms([])} className={ghostButton}>Ninguno</button>
+                                </div>
+                            )}
+                        </div>
+
+                        {locked ? (
+                            <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 text-sm text-slate-700 dark:text-slate-300">
+                                {user.is_developer ? 'El desarrollador siempre tiene todos los permisos.' : 'Tus propios permisos solo los puede cambiar otra persona con acceso a Usuarios.'}
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 gap-2.5">
+                                {groups.map(g => {
+                                    const on = has(`${g.key}.ver`);
+                                    return (
+                                        <div key={g.key} className={`rounded-2xl border bg-white dark:bg-slate-800 transition-colors ${on ? 'border-indigo-300 dark:border-indigo-700' : 'border-slate-200 dark:border-slate-700'}`}>
+                                            <label className="flex items-center gap-3 px-4 py-3 cursor-pointer">
+                                                <span className="text-xl leading-none" aria-hidden="true">{g.icon}</span>
+                                                <span className={`flex-1 text-sm font-bold ${on ? 'text-slate-900 dark:text-white' : 'text-slate-600 dark:text-slate-400'}`}>{g.label}</span>
+                                                <input type="checkbox" role="switch" className="sr-only peer" checked={on} onChange={() => toggleModule(g)} aria-label={`Acceso a ${g.label}`} />
+                                                <span aria-hidden="true" className={`relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-indigo-500 peer-focus-visible:ring-offset-2 ${on ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-600'}`}>
+                                                    <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${on ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                                                </span>
+                                            </label>
+                                            <div className={`flex flex-wrap gap-2 px-4 pb-3 ${on ? '' : 'opacity-60'}`}>
+                                                {g.actions.map(a => {
+                                                    const active = has(a.key);
+                                                    return (
+                                                        <button
+                                                            key={a.key}
+                                                            type="button"
+                                                            onClick={() => toggleAction(g, a.key)}
+                                                            aria-pressed={active}
+                                                            className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border text-[13px] font-semibold transition-colors ${active
+                                                                ? 'bg-indigo-600 border-indigo-600 text-white'
+                                                                : 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:border-indigo-400'}`}
+                                                        >
+                                                            <span aria-hidden="true" className={`w-3.5 h-3.5 rounded flex items-center justify-center ${active ? 'bg-white/25' : 'border border-slate-400 dark:border-slate-500'}`}>
+                                                                {active && <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="3.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                                                            </span>
+                                                            {a.label}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                        <InputError message={permissionError} className="mt-2" />
+                    </section>
+                </div>
+
+                {/* Pie fijo */}
+                <div className="flex items-center justify-end gap-2 px-5 sm:px-6 py-3.5 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700">
+                    <button type="button" onClick={onClose} className="h-10 px-4 rounded-xl text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">Cancelar</button>
+                    <button type="submit" disabled={processing} className="h-10 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-sm font-bold shadow-sm">
+                        {processing ? 'Guardando…' : isNew ? 'Crear usuario' : 'Guardar cambios'}
+                    </button>
+                </div>
+            </form>
+        </div>,
+        document.body
+    );
+}
+
+const inputClass = 'mt-1 block w-full h-10 px-3 rounded-lg border shadow-sm border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-white focus:border-indigo-500 focus:ring-indigo-500';
+const ghostButton = 'h-9 px-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-[13px] font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700';
+
+function Field({ label, hint, error, children }) {
+    return (
+        <label className="block">
+            <span className="text-[13px] font-semibold text-slate-700 dark:text-slate-300">{label}</span>
+            {children}
+            {hint && !error && <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">{hint}</span>}
+            <InputError message={error} className="mt-1" />
+        </label>
     );
 }

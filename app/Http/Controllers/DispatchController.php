@@ -13,6 +13,26 @@ use Maatwebsite\Excel\Concerns\FromCollection;
 
 class DispatchController extends Controller
 {
+    /**
+     * Estado actual del mensajero con el mismo criterio del dashboard.
+     * Si DispatchTrack no responde, se asume que no está en ruta.
+     */
+    private function messengerState(Messenger $messenger): string
+    {
+        $data = app(\App\Services\MessengerStatusService::class)->getSingleStatus($messenger->id);
+
+        $normalize = fn($s) => preg_replace('/[^A-Z0-9]/', '', strtoupper((string) $s));
+        $onRoute = false;
+        try {
+            $status = app(\App\Services\BeetrackService::class)->getDispatchStatus();
+            $onRoute = collect($status['activos'] ?? [])->contains(fn($r) => $messenger->vehicle && $normalize($r['unidad'] ?? '') === $normalize($messenger->vehicle));
+        } catch (\Throwable $e) {
+            \Log::warning('No se pudo consultar DispatchTrack al asignar ruta: ' . $e->getMessage());
+        }
+
+        return \App\Support\MessengerStates::of($data, $onRoute);
+    }
+
     // Index method moved to UnifiedController
     // public function index() { ... }
 
@@ -28,6 +48,14 @@ class DispatchController extends Controller
         $file = $request->file('file');
         $location = DispatchLocation::findOrFail($request->location_id);
         $messenger = Messenger::findOrFail($request->messenger_id);
+
+        // Solo en los estados que Configuración permite
+        $state = $this->messengerState($messenger);
+        if (!in_array($state, \App\Support\MessengerStates::assignable())) {
+            return response()->json([
+                'message' => 'No se puede asignar ruta a un mensajero en estado "' . \App\Support\MessengerStates::STATES[$state] . '".',
+            ], 422);
+        }
         $lastRoute = $request->boolean('last_route');
         $vehiclePlate = strtoupper($messenger->vehicle ?? 'SIN-PLACA');
 

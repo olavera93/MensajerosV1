@@ -8,8 +8,10 @@ import SecondaryButton from '@/Components/SecondaryButton';
 import Modal from '@/Components/Modal';
 import TextInput from '@/Components/TextInput';
 import InputLabel from '@/Components/InputLabel';
+import useCan from '@/hooks/useCan';
 
 export default function Exit({ messengers, filters }) {
+    const can = useCan();
     const [startDate, setStartDate] = useState(filters.start_date || new Date().toISOString().split('T')[0]);
     const [endDate, setEndDate] = useState(filters.end_date || new Date().toISOString().split('T')[0]);
     const [selectedMessenger, setSelectedMessenger] = useState(filters.messenger_id || '');
@@ -142,18 +144,22 @@ export default function Exit({ messengers, filters }) {
                                 </button>
                             )}
                         </div>
-                        <PrimaryButton onClick={handleSync} disabled={syncing} className="flex items-center gap-2">
-                            <svg className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                            </svg>
-                            {syncing ? 'SINCRONIZANDO...' : 'SINCRONIZAR DISPATCHTRACK'}
-                        </PrimaryButton>
-                        <SuccessButton onClick={() => { setExportDates({ start: startDate, end: endDate }); setShowExportModal(true); }} className="flex items-center gap-2">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                            </svg>
-                            EXPORTAR
-                        </SuccessButton>
+                        {can('salida.sincronizar') && (
+                            <PrimaryButton onClick={handleSync} disabled={syncing} className="flex items-center gap-2">
+                                <svg className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                </svg>
+                                {syncing ? 'SINCRONIZANDO...' : 'SINCRONIZAR DISPATCHTRACK'}
+                            </PrimaryButton>
+                        )}
+                        {can('salida.exportar') && (
+                            <SuccessButton onClick={() => { setExportDates({ start: startDate, end: endDate }); setShowExportModal(true); }} className="flex items-center gap-2">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                                EXPORTAR
+                            </SuccessButton>
+                        )}
                     </div>
                 </div>
 

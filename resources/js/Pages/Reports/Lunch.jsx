@@ -6,8 +6,10 @@ import SecondaryButton from '@/Components/SecondaryButton';
 import TextInput from '@/Components/TextInput';
 import InputLabel from '@/Components/InputLabel';
 import Modal from '@/Components/Modal';
+import useCan from '@/hooks/useCan';
 
 export default function LunchReport({ filters }) {
+    const can = useCan();
     const [startDate, setStartDate] = useState(filters?.start_date || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
     const [endDate, setEndDate] = useState(filters?.end_date || new Date().toISOString().split('T')[0]);
     const [messengerSearch, setMessengerSearch] = useState('');
@@ -119,12 +121,14 @@ export default function LunchReport({ filters }) {
                             )}
                         </div>
                         {/* Export */}
-                        <SuccessButton onClick={() => { setExportDates({ start: startDate, end: endDate }); setShowExportModal(true); }} className="flex items-center gap-2">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                            </svg>
-                            EXPORTAR
-                        </SuccessButton>
+                        {can('almuerzo.exportar') && (
+                            <SuccessButton onClick={() => { setExportDates({ start: startDate, end: endDate }); setShowExportModal(true); }} className="flex items-center gap-2">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                                EXPORTAR
+                            </SuccessButton>
+                        )}
                     </div>
                 </div>
 

@@ -8,8 +8,10 @@ import TextInput from '@/Components/TextInput';
 import InputLabel from '@/Components/InputLabel';
 import InputError from '@/Components/InputError';
 import SelectInput from '@/Components/SelectInput';
+import useCan from '@/hooks/useCan';
 
 export default function ProcedureIndex({ procedures, messengers, filters, stats }) {
+    const can = useCan();
     const { flash } = usePage().props;
     const [showModal, setShowModal] = useState(false);
     const [editingProcedure, setEditingProcedure] = useState(null);
@@ -251,12 +253,16 @@ export default function ProcedureIndex({ procedures, messengers, filters, stats 
                                     <div className="text-xs font-black text-emerald-600 leading-none">{stats.completado}</div>
                                 </div>
                             </div>
-                            <button onClick={() => setShowImportModal(true)} className="px-5 py-2.5 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-bold text-[11px] uppercase tracking-widest hover:bg-slate-50 dark:hover:bg-slate-700 transition-all active:scale-95 border border-slate-200 dark:border-slate-700 shadow-sm">
-                                📥 Importar
-                            </button>
-                            <button onClick={() => openModal()} className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-bold text-[11px] uppercase tracking-widest hover:bg-indigo-700 transition-all active:scale-95 shadow-lg shadow-indigo-100 dark:shadow-none">
-                                ➕ Nuevo Registro
-                            </button>
+                            {can('tramites.editar') && (
+                                <button onClick={() => setShowImportModal(true)} className="px-5 py-2.5 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-bold text-[11px] uppercase tracking-widest hover:bg-slate-50 dark:hover:bg-slate-700 transition-all active:scale-95 border border-slate-200 dark:border-slate-700 shadow-sm">
+                                    📥 Importar
+                                </button>
+                            )}
+                            {can('tramites.editar') && (
+                                <button onClick={() => openModal()} className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-bold text-[11px] uppercase tracking-widest hover:bg-indigo-700 transition-all active:scale-95 shadow-lg shadow-indigo-100 dark:shadow-none">
+                                    ➕ Nuevo Registro
+                                </button>
+                            )}
                         </div>
                     </div>
 
@@ -331,48 +337,54 @@ export default function ProcedureIndex({ procedures, messengers, filters, stats 
                             </div>
 
                             <div className="flex flex-wrap items-center gap-2">
-                                <div className="flex items-center gap-2 bg-indigo-700/50 p-1.5 rounded-xl border border-white/5">
-                                    <SelectInput
-                                        className="text-[10px] py-1 bg-transparent border-none text-white focus:ring-0 min-w-[140px]"
-                                        value={pendingActions.messenger_id}
-                                        onChange={e => setPendingActions({ ...pendingActions, messenger_id: e.target.value })}
+                                {can('tramites.editar') && (
+                                    <div className="flex items-center gap-2 bg-indigo-700/50 p-1.5 rounded-xl border border-white/5">
+                                        <SelectInput
+                                            className="text-[10px] py-1 bg-transparent border-none text-white focus:ring-0 min-w-[140px]"
+                                            value={pendingActions.messenger_id}
+                                            onChange={e => setPendingActions({ ...pendingActions, messenger_id: e.target.value })}
+                                        >
+                                            <option value="" className="text-slate-800">Assignar Mensajero...</option>
+                                            {messengers.map(m => (
+                                                <option key={m.id} value={m.id} className="text-slate-800">{m.name}</option>
+                                            ))}
+                                        </SelectInput>
+
+                                        <div className="w-[1px] h-4 bg-white/20"></div>
+
+                                        <SelectInput
+                                            className="text-[10px] py-1 bg-transparent border-none text-white focus:ring-0 min-w-[120px]"
+                                            value={pendingActions.status}
+                                            onChange={e => setPendingActions({ ...pendingActions, status: e.target.value })}
+                                        >
+                                            <option value="" className="text-slate-800">Cambiar Estado...</option>
+                                            <option value="pendiente" className="text-slate-800">Pendiente</option>
+                                            <option value="en_ruta" className="text-slate-800">En Ruta</option>
+                                            <option value="completado" className="text-slate-800">Completado</option>
+                                        </SelectInput>
+                                    </div>
+                                )}
+
+                                {can('tramites.editar') && (
+                                    <button
+                                        onClick={handleBulkAction}
+                                        className="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-lg shadow-emerald-900/20"
                                     >
-                                        <option value="" className="text-slate-800">Assignar Mensajero...</option>
-                                        {messengers.map(m => (
-                                            <option key={m.id} value={m.id} className="text-slate-800">{m.name}</option>
-                                        ))}
-                                    </SelectInput>
-
-                                    <div className="w-[1px] h-4 bg-white/20"></div>
-
-                                    <SelectInput
-                                        className="text-[10px] py-1 bg-transparent border-none text-white focus:ring-0 min-w-[120px]"
-                                        value={pendingActions.status}
-                                        onChange={e => setPendingActions({ ...pendingActions, status: e.target.value })}
-                                    >
-                                        <option value="" className="text-slate-800">Cambiar Estado...</option>
-                                        <option value="pendiente" className="text-slate-800">Pendiente</option>
-                                        <option value="en_ruta" className="text-slate-800">En Ruta</option>
-                                        <option value="completado" className="text-slate-800">Completado</option>
-                                    </SelectInput>
-                                </div>
-
-                                <button
-                                    onClick={handleBulkAction}
-                                    className="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-lg shadow-emerald-900/20"
-                                >
-                                    ⚡ Aplicar Cambios
-                                </button>
+                                        ⚡ Aplicar Cambios
+                                    </button>
+                                )}
 
                                 <div className="w-[1px] h-6 bg-white/10 mx-1"></div>
 
-                                <button
-                                    onClick={handleBulkExport}
-                                    className="bg-white/10 hover:bg-white/20 px-3 py-2 rounded-xl text-[10px] font-black uppercase transition-colors"
-                                    title="Exportar selección a Excel"
-                                >
-                                    📤 Exportar
-                                </button>
+                                {can('tramites.exportar') && (
+                                    <button
+                                        onClick={handleBulkExport}
+                                        className="bg-white/10 hover:bg-white/20 px-3 py-2 rounded-xl text-[10px] font-black uppercase transition-colors"
+                                        title="Exportar selección a Excel"
+                                    >
+                                        📤 Exportar
+                                    </button>
+                                )}
 
                                 <button
                                     onClick={() => { setSelectedIds([]); setPendingActions({ status: '', messenger_id: '' }); }}
@@ -481,12 +493,16 @@ export default function ProcedureIndex({ procedures, messengers, filters, stats 
                                                 <button onClick={() => openModal(p, true)} className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg transition-colors" title="Ver Detalles">
                                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                                                 </button>
-                                                <button onClick={() => openModal(p)} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Editar">
-                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                                                </button>
-                                                <button onClick={() => handleDelete(p.id)} className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors" title="Eliminar">
-                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                                </button>
+                                                {can('tramites.editar') && (
+                                                    <button onClick={() => openModal(p)} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Editar">
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                                    </button>
+                                                )}
+                                                {can('tramites.eliminar') && (
+                                                    <button onClick={() => handleDelete(p.id)} className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors" title="Eliminar">
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                    </button>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>

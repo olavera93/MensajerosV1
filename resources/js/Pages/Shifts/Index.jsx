@@ -11,11 +11,13 @@ import ShiftModal from '@/Components/ShiftModal';
 import dayjs from 'dayjs';
 import 'dayjs/locale/es';
 import isBetween from 'dayjs/plugin/isBetween';
+import useCan from '@/hooks/useCan';
 
 dayjs.locale('es');
 dayjs.extend(isBetween);
 
 export default function ShiftsIndex({ auth, messengers, weekStart, weekEnd }) {
+    const can = useCan();
     const { errors } = usePage().props;
     const [selectedShift, setSelectedShift] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -100,6 +102,7 @@ export default function ShiftsIndex({ auth, messengers, weekStart, weekEnd }) {
     const days = Array.from({ length: 7 }, (_, i) => start.add(i, 'day'));
 
     const handleCellClick = (messenger, dateString, shift) => {
+        if (!can('horarios.editar')) return; // solo lectura
         setModalMessenger(messenger);
         setModalDate(dateString);
         setSelectedShift(shift);
@@ -165,31 +168,37 @@ export default function ShiftsIndex({ auth, messengers, weekStart, weekEnd }) {
                     {/* Navigation */}
                     <div className="flex flex-col lg:flex-row justify-between items-stretch lg:items-center mb-8 gap-6">
                         <div className="flex flex-col sm:flex-row items-stretch gap-3">
-                            <a
-                                href={route('shifts.template')}
-                                className="inline-flex items-center justify-center px-4 py-2.5 bg-white dark:bg-gray-800 border border-slate-200 dark:border-slate-700 rounded-xl font-bold text-[10px] text-slate-600 dark:text-slate-300 uppercase tracking-widest shadow-sm hover:bg-slate-50 transition-all font-sans"
-                            >
-                                📄 Plantilla
-                            </a>
-                            <label className="inline-flex items-center justify-center px-4 py-2.5 bg-indigo-600 border border-transparent rounded-xl font-bold text-[10px] text-white uppercase tracking-widest hover:bg-indigo-500 shadow-lg shadow-indigo-200 dark:shadow-none transition-all cursor-pointer">
-                                📤 Cargar Turnos
-                                <input
-                                    type="file"
-                                    className="hidden"
-                                    accept=".xlsx, .xls"
-                                    onChange={handleFileUpload}
-                                />
-                            </label>
+                            {can('horarios.editar', 'horarios.exportar') && (
+                                <a
+                                    href={route('shifts.template')}
+                                    className="inline-flex items-center justify-center px-4 py-2.5 bg-white dark:bg-gray-800 border border-slate-200 dark:border-slate-700 rounded-xl font-bold text-[10px] text-slate-600 dark:text-slate-300 uppercase tracking-widest shadow-sm hover:bg-slate-50 transition-all font-sans"
+                                >
+                                    📄 Plantilla
+                                </a>
+                            )}
+                            {can('horarios.editar') && (
+                                <label className="inline-flex items-center justify-center px-4 py-2.5 bg-indigo-600 border border-transparent rounded-xl font-bold text-[10px] text-white uppercase tracking-widest hover:bg-indigo-500 shadow-lg shadow-indigo-200 dark:shadow-none transition-all cursor-pointer">
+                                    📤 Cargar Turnos
+                                    <input
+                                        type="file"
+                                        className="hidden"
+                                        accept=".xlsx, .xls"
+                                        onChange={handleFileUpload}
+                                    />
+                                </label>
+                            )}
 
-                            <SuccessButton
-                                onClick={() => setShowExportModal(true)}
-                                className="justify-center"
-                            >
-                                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                </svg>
-                                EXPORTAR
-                            </SuccessButton>
+                            {can('horarios.exportar') && (
+                                <SuccessButton
+                                    onClick={() => setShowExportModal(true)}
+                                    className="justify-center"
+                                >
+                                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                    </svg>
+                                    EXPORTAR
+                                </SuccessButton>
+                            )}
                         </div>
 
                         {/* Filters panel */}

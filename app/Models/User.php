@@ -23,6 +23,7 @@ class User extends Authenticatable
         'password',
         'role',
         'modules',
+        'permissions',
     ];
 
     /**
@@ -46,6 +47,29 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'modules' => 'array',
+            'permissions' => 'array',
         ];
+    }
+
+    /** El desarrollador siempre tiene todos los permisos. */
+    public function isDeveloper(): bool
+    {
+        return $this->role === 'desarrollador';
+    }
+
+    public function hasPermission(string $permission): bool
+    {
+        return in_array($permission, \App\Support\Permissions::for($this));
+    }
+
+    /** Ruta de inicio tras el login: el primer módulo que puede ver. */
+    public function homeRoute(): string
+    {
+        foreach (\App\Support\Permissions::GROUPS as $group => $def) {
+            if ($this->hasPermission("$group.ver")) {
+                return $def['route'];
+            }
+        }
+        return 'landing';
     }
 }
