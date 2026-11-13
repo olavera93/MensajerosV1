@@ -4,6 +4,7 @@ import TextInput from '@/Components/TextInput';
 import InputLabel from '@/Components/InputLabel';
 import SecondaryButton from '@/Components/SecondaryButton';
 import axios from 'axios';
+import csrfHeaders from '@/utils/csrf';
 
 const TABLES = [
     { key: 'lunch_logs', label: '🍽️ Registros de Almuerzo', desc: 'Registros de inicio/fin de almuerzo por fecha de inicio' },
@@ -90,10 +91,9 @@ export default function DataPurgeModal({ show, onClose }) {
     const handleVerifyPassword = async () => {
         setLoading(true); setPasswordError('');
         try {
-            const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
             const res = await fetch(route('admin.purge.verify'), {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf },
+                headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
                 body: JSON.stringify({ password }),
             });
             if (res.status === 422) {
@@ -114,10 +114,9 @@ export default function DataPurgeModal({ show, onClose }) {
         if (confirmation !== 'ELIMINAR') return;
         setLoading(true);
         try {
-            const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
             const res = await fetch(route('admin.purge.execute'), {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf },
+                headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
                 body: JSON.stringify({
                     start_date: startDate, end_date: endDate,
                     tables, password, confirmation: 'ELIMINAR'

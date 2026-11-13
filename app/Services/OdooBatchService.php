@@ -102,8 +102,8 @@ class OdooBatchService
         $rows = [];
         $guides = [];
         foreach ($pickings as $p) {
-            $partner = $partners[$this->id($p['partner_id'] ?? false)] ?? [];
-            $sale = $sales[$this->id($p['sale_id'] ?? false)] ?? [];
+            $partner = $partners[$this->id($p['partner_id'] ?? false) ?? 0] ?? []; // OUT sin contacto: datos vacíos
+            $sale = $sales[$this->id($p['sale_id'] ?? false) ?? 0] ?? [];
             $guide = $this->text($p['origin'] ?? null) ?: $p['name'];
             // Como el Excel exportado: teléfono; si no hay, el celular (el export lo dejaba vacío)
             $phone = $this->text($partner['phone'] ?? null) ?: $this->text($partner['mobile'] ?? null);

@@ -9,6 +9,7 @@ import SecondaryButton from '@/Components/SecondaryButton';
 import Modal from '@/Components/Modal';
 import { toast } from 'sonner';
 import useCan from '@/hooks/useCan';
+import csrfHeaders from '@/utils/csrf';
 
 const getPriority = (status) => {
     const s = String(status || '').toLowerCase();
@@ -248,9 +249,7 @@ export default function Dashboard({ messengers, dispatch_locations, beetrack_dat
         formData.append('messenger_id', data.messenger_id);
         formData.append('last_route', data.last_route ? '1' : '0');
         formData.append('output_name', data.output_name);
-        const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-        if (token) formData.append('_token', token);
-        return { formData, token };
+        return { formData, headers: csrfHeaders() };
     };
 
     // DispatchTrack procesa la importación en segundo plano: se consulta hasta confirmar la ruta
@@ -267,12 +266,12 @@ export default function Dashboard({ messengers, dispatch_locations, beetrack_dat
     };
 
     const sendToDispatchTrack = (confirmDuplicates = false) => {
-        const { formData, token } = buildDispatchForm();
+        const { formData, headers } = buildDispatchForm();
         formData.append('send_to_dispatchtrack', '1');
         if (confirmDuplicates) formData.append('confirm_duplicates', '1');
         setSubmitError('');
         setDtState('sending');
-        fetch(route('dispatch.store'), { method: 'POST', body: formData, headers: { 'X-CSRF-TOKEN': token, Accept: 'application/json' } })
+        fetch(route('dispatch.store'), { method: 'POST', body: formData, headers: { ...headers, Accept: 'application/json' } })
             .then(r => r.json().catch(() => ({})).then(body => ({ ok: r.ok, status: r.status, body })))
             .then(({ ok, status, body }) => {
                 if (status === 409) return setDtState({ duplicates: body.duplicates || [] });
@@ -290,13 +289,13 @@ export default function Dashboard({ messengers, dispatch_locations, beetrack_dat
     const handleDispatchSubmit = (e) => {
         e.preventDefault();
         setSubmitError('');
-        const { formData, token } = buildDispatchForm();
+        const { formData, headers } = buildDispatchForm();
         setGenerating(true);
         fetch(route('dispatch.store'), {
             method: 'POST',
             body: formData,
             // Accept JSON: los errores de validación llegan como 422 y no como una página descargada
-            headers: { 'X-CSRF-TOKEN': token, Accept: 'application/json' },
+            headers: { ...headers, Accept: 'application/json' },
         })
             .then(response => {
                 if (response.ok) return response.blob();
@@ -993,8 +992,8 @@ function BatchPreview({ preview }) {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                        {preview.guides.map(g => (
-                            <tr key={g.guide}>
+                        {preview.guides.map((g, i) => (
+                            <tr key={`${g.guide}-${i}`}>
                                 <td className="px-4 py-2 font-mono font-semibold text-slate-900 dark:text-white whitespace-nowrap">
                                     {g.guide}
                                     {g.priority === 'Urgente' && <span className="ml-1.5 px-1.5 py-0.5 rounded bg-rose-100 dark:bg-rose-900/40 text-[11px] font-bold text-rose-700 dark:text-rose-300">Urgente</span>}

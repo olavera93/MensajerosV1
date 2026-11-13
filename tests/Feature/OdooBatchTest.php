@@ -332,4 +332,56 @@ INV  12345"],
         $this->travel(6)->minutes();
         $this->actingAs($user)->getJson(route('dispatch.dispatchtrack-status', $logId))->assertJson(['status' => 'not_found']);
     }
+
+    public function test_an_earlier_route_of_the_same_truck_is_not_taken_as_the_new_one(): void
+    {
+        config(['services.beetrack.create_routes' => true, 'services.beetrack.api_key' => 'token']);
+        [$user, $messenger, $location] = $this->coordinator();
+        $logId = $this->sendRoute($user, $messenger, $location, ['confirm_duplicates' => true])->json('log_id');
+
+        // Ruta anterior del mismo vehículo con las mismas guías, pero con otra guía de retorno
+        Cache::flush();
+        $this->todayRoutes = [['id' => 990, 'truck' => ['identifier' => 'ABC12D'], 'dispatches' => [['identifier' => 'S000100'], ['identifier' => 'WH499']]]];
+        $this->actingAs($user)->getJson(route('dispatch.dispatchtrack-status', $logId))->assertJson(['status' => 'queued']);
+    }
+
+    public function test_messenger_without_plate_cannot_be_sent(): void
+    {
+        config(['services.beetrack.create_routes' => true, 'services.beetrack.api_key' => 'token']);
+        [$user, $messenger, $location] = $this->coordinator();
+        $messenger->update(['vehicle' => null]);
+
+        $this->sendRoute($user, $messenger, $location)
+            ->assertStatus(422)
+            ->assertJson(['message' => 'Mensajero Prueba no tiene placa registrada; no se puede crear la ruta en DispatchTrack.']);
+        $this->assertEmpty($this->importCalls());
+        $this->assertSame(500, $location->fresh()->current_consecutive);
+    }
+
+    public function test_file_without_guides_does_not_create_a_route(): void
+    {
+        [$user, $messenger, $location] = $this->coordinator();
+        $sheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet->getActiveSheet()->fromArray([['guia', 'producto']]);
+        $tmp = tempnam(sys_get_temp_dir(), 'vacio') . '.xlsx';
+        (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($sheet))->save($tmp);
+
+        $this->actingAs($user)->post(route('dispatch.store'), [
+            'file' => new \Illuminate\Http\UploadedFile($tmp, 'vacio.xlsx', null, null, true),
+            'location_id' => $location->id, 'messenger_id' => $messenger->id, 'output_name' => 'vacio',
+        ], ['Accept' => 'application/json'])
+            ->assertStatus(422)
+            ->assertJson(['message' => 'El archivo no tiene guías.']);
+        $this->assertSame(0, DispatchLog::count());
+        $this->assertSame(500, $location->fresh()->current_consecutive);
+        @unlink($tmp);
+    }
+
+    public function test_crear_ruta_dt_always_includes_asignar_ruta(): void
+    {
+        $this->assertSame(
+            ['dashboard.ver', 'dashboard.asignar_ruta', 'dashboard.crear_ruta_dt'],
+            \App\Support\Permissions::normalize(['dashboard.crear_ruta_dt'])
+        );
+    }
 }

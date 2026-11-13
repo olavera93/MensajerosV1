@@ -37,6 +37,9 @@ return new class extends Migration {
 
             $permissions = array_merge(...array_map(fn($g) => Permissions::group($g), array_values($groups)) ?: [[]]);
 
+            // Acciones que no existían antes (no se heredan del módulo): las otorga su propia migración
+            $permissions = array_diff($permissions, ['dashboard.crear_ruta_dt']);
+
             DB::table('users')->where('id', $user->id)->update(['permissions' => json_encode(Permissions::normalize($permissions))]);
         }
     }

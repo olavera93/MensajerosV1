@@ -1,5 +1,6 @@
 import React from 'react';
 import { Head, useForm } from '@inertiajs/react';
+import csrfHeaders from '@/utils/csrf';
 
 export default function DispatchIndex({ locations, messengers }) {
     const { data, setData, post, processing, errors } = useForm({
@@ -26,12 +27,12 @@ export default function DispatchIndex({ locations, messengers }) {
         formData.append('messenger_id', data.messenger_id);
         formData.append('last_route', data.last_route ? '1' : '0');
         formData.append('output_name', data.output_name);
-        formData.append('_token', document.querySelector('meta[name="csrf-token"]').getAttribute('content'));
 
         // Native submit
         fetch(route('dispatch.store'), {
             method: 'POST',
             body: formData,
+            headers: csrfHeaders(),
         })
             .then(response => {
                 if (response.ok) {

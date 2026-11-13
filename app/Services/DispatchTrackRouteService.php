@@ -85,12 +85,15 @@ class DispatchTrackRouteService
 
         $normalize = fn($s) => preg_replace('/[^A-Z0-9]/', '', strtoupper((string) $s));
         $guides = array_map('strval', $log->dt_guides ?? []);
+        // La guía de retorno (WH/TE + consecutivo) es única por envío: identifica esta ruta y no otra
+        // anterior del mismo vehículo con las mismas guías. Sin retorno, basta cualquiera de sus guías.
+        $returnGuide = $log->consecutive !== 'LAST_ROUTE' ? (string) $log->consecutive : null;
 
         try {
-            $route = collect($this->beetrack->getTodayRoutes())->first(function ($r) use ($log, $normalize, $guides) {
+            $route = collect($this->beetrack->getTodayRoutes())->first(function ($r) use ($log, $normalize, $guides, $returnGuide) {
                 $sameTruck = $normalize($r['truck']['identifier'] ?? $r['truck_identifier'] ?? '') === $normalize($log->dt_truck);
                 $ids = collect($r['dispatches'] ?? [])->pluck('identifier')->map(fn($id) => (string) $id)->all();
-                return $sameTruck && array_intersect($guides, $ids);
+                return $sameTruck && ($returnGuide ? in_array($returnGuide, $ids, true) : (bool) array_intersect($guides, $ids));
             });
         } catch (\Throwable $e) {
             return $log; // se reintenta en la siguiente consulta

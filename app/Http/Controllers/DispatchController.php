@@ -100,6 +100,16 @@ class DispatchController extends Controller
             $rows = array_slice($rows, 1); // Skip header
         }
 
+        // Sin guías no hay ruta: evita un rutero (o una ruta en DispatchTrack) solo con la guía de retorno
+        if (empty(array_filter($rows, fn($r) => trim((string) ($r[0] ?? '')) !== ''))) {
+            return response()->json(['message' => $batch !== '' ? "El batch {$batch} no tiene productos para despachar." : 'El archivo no tiene guías.'], 422);
+        }
+
+        // DispatchTrack identifica la ruta por la placa del vehículo
+        if ($send && !trim((string) $messenger->vehicle)) {
+            return response()->json(['message' => "{$messenger->name} no tiene placa registrada; no se puede crear la ruta en DispatchTrack."], 422);
+        }
+
         if ($send && !$request->boolean('confirm_duplicates')) {
             $duplicates = [];
             if (\App\Models\DispatchLog::where('source_batch', $batch)->whereNotNull('dt_sent_at')->whereDate('created_at', today())->exists()) {
@@ -196,7 +206,8 @@ class DispatchController extends Controller
         // "obtener_datos_ubicacion"
         return \Illuminate\Support\Facades\DB::transaction(function () use ($request, $processed, $lastRoute, $location, $messenger, $vehiclePlate, $batch, $send, $dispatchTrack) {
         if (!$lastRoute) {
-            // Increment logic
+            // Bloquea la sede hasta terminar: dos rutas simultáneas no pueden recibir la misma guía de retorno
+            $location = DispatchLocation::whereKey($location->id)->lockForUpdate()->first();
             $consecutive = $location->current_consecutive;
             $prefix = $location->prefix;
             $location->increment('current_consecutive');
