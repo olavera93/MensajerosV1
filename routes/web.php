@@ -14,6 +14,7 @@ use App\Http\Controllers\ExternalFormController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ProcedureController;
 use App\Http\Controllers\PurgeController;
+use App\Http\Controllers\EventController;
 use App\Http\Controllers\CleaningController;
 use App\Http\Controllers\GlobalStatsController;
 use App\Http\Controllers\SettingsController;
@@ -27,6 +28,7 @@ Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 Route::get('/messenger', [LunchController::class, 'index'])->name('landing');
 Route::post('/messenger/check-plate', [LunchController::class, 'checkPlate'])->name('messenger.check-plate');
 Route::get('/messenger/{id}/shifts', [LunchController::class, 'getShifts'])->name('messenger.shifts');
+Route::get('/messenger/{id}/events', [EventController::class, 'getForMessenger'])->name('messenger.events');
 Route::post('/lunch', [LunchController::class, 'store'])->name('lunch.store');
 Route::post('/shift-completion', [ShiftCompletionController::class, 'store'])->name('shift-completion.store');
 
@@ -142,7 +144,11 @@ Route::middleware(['auth'])->group(function () {
     });
     Route::resource('procedures', ProcedureController::class)->only(['destroy'])->middleware('permission:tramites.eliminar');
 
-    // 12. Configuración
+    // 12. Eventos
+    Route::get('/events', [EventController::class, 'index'])->middleware('permission:eventos.ver')->name('events.index');
+    Route::resource('events', EventController::class)->only(['store', 'update', 'destroy'])->middleware('permission:eventos.editar');
+
+    // 13. Configuración
     Route::get('/settings', [SettingsController::class, 'index'])->middleware('permission:configuracion.ver')->name('settings.index');
     Route::put('/settings', [SettingsController::class, 'update'])->middleware('permission:configuracion.editar')->name('settings.update');
 });

@@ -41,6 +41,9 @@ class Permissions
         'tramites' => ['label' => 'Trámites', 'icon' => '💼', 'route' => 'procedures.index', 'actions' => [
             'ver' => 'Ver', 'editar' => 'Crear, editar e importar', 'eliminar' => 'Eliminar', 'exportar' => 'Exportar',
         ]],
+        'eventos' => ['label' => 'Eventos', 'icon' => '📌', 'route' => 'events.index', 'actions' => [
+            'ver' => 'Ver', 'editar' => 'Crear, editar y eliminar',
+        ]],
         'usuarios' => ['label' => 'Usuarios', 'icon' => '👤', 'route' => 'users.index', 'actions' => [
             'ver' => 'Ver', 'editar' => 'Crear y editar', 'eliminar' => 'Eliminar',
         ]],
@@ -55,6 +58,7 @@ class Permissions
         'reports.lunch' => 'almuerzo', 'reports.exit' => 'salida', 'reports.preoperational' => 'preoperacional',
         'reports.cleaning' => 'aseo', 'reports.global-stats' => 'estadisticas',
         'external-forms.index' => 'formularios', 'users.index' => 'usuarios', 'procedures.index' => 'tramites',
+        'events.index' => 'eventos',
     ];
 
     /** Acciones que necesitan otra para funcionar (se agregan solas al otorgarlas). */

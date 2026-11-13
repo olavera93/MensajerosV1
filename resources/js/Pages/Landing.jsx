@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { Head, useForm, usePage, router } from '@inertiajs/react';
 import axios from 'axios';
+import dayjs from 'dayjs';
+import 'dayjs/locale/es';
+import isoWeek from 'dayjs/plugin/isoWeek';
 import TextInput from '@/Components/TextInput';
 import TextArea from '@/Components/TextArea';
 import PrimaryButton from '@/Components/PrimaryButton';
@@ -8,6 +11,9 @@ import SecondaryButton from '@/Components/SecondaryButton';
 import SuccessButton from '@/Components/SuccessButton';
 import WarningButton from '@/Components/WarningButton';
 import DangerButton from '@/Components/DangerButton';
+
+dayjs.extend(isoWeek);
+dayjs.locale('es');
 
 export default function Landing() {
     const { flash, errors: pageErrors } = usePage().props;
@@ -20,6 +26,9 @@ export default function Landing() {
     const [selectedWeek, setSelectedWeek] = useState(null);
     const [weekShifts, setWeekShifts] = useState([]);
     const [shiftsLoading, setShiftsLoading] = useState(false);
+    const [eventsWeekDate, setEventsWeekDate] = useState(null); // lunes de la semana mostrada
+    const [weekEvents, setWeekEvents] = useState([]);
+    const [eventsLoading, setEventsLoading] = useState(false);
 
     // Preoperational State
     const [preopQuestions, setPreopQuestions] = useState([]);
@@ -193,6 +202,22 @@ export default function Landing() {
         }
     };
 
+    const loadEvents = async (weekMonday) => {
+        setEventsWeekDate(weekMonday);
+        setEventsLoading(true);
+        try {
+            const res = await axios.get(route('messenger.events', messenger.id), {
+                params: { date: weekMonday.format('YYYY-MM-DD'), _t: Date.now() },
+                headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
+            });
+            setWeekEvents(res.data.events || []);
+        } catch {
+            setWeekEvents([]);
+        } finally {
+            setEventsLoading(false);
+        }
+    };
+
     const resetAll = () => {
         setViewState('search');
         setMessenger(null);
@@ -201,6 +226,8 @@ export default function Landing() {
         setActiveLunch(null);
         setSelectedWeek(null);
         setWeekShifts([]);
+        setEventsWeekDate(null);
+        setWeekEvents([]);
         setCleaningItem('');
         setCleaningType('');
         setCleaningObservations('');
@@ -340,6 +367,17 @@ export default function Landing() {
                         <PrimaryButton onClick={() => setViewState('shifts_view')} className="w-full py-5 flex items-center justify-between text-lg group">
                             <span className="flex items-center gap-3"><span className="text-2xl">📅</span><span>VER MIS HORARIOS</span></span>
                             <span className="text-indigo-200 group-hover:text-white">→</span>
+                        </PrimaryButton>
+
+                        <PrimaryButton
+                            onClick={() => {
+                                setViewState('events_view');
+                                loadEvents(dayjs().isoWeekday(1).startOf('day'));
+                            }}
+                            className="w-full py-5 flex items-center justify-between text-lg group bg-violet-600 hover:bg-violet-700 border-violet-700"
+                        >
+                            <span className="flex items-center gap-3"><span className="text-2xl">📌</span><span>MIS EVENTOS</span></span>
+                            <span className="text-violet-200 group-hover:text-white">→</span>
                         </PrimaryButton>
 
                         <PrimaryButton
@@ -561,6 +599,80 @@ export default function Landing() {
                                 ))
                             )}
                         </div>
+                        <SecondaryButton onClick={() => setViewState('options')} className="w-full justify-center">Volver</SecondaryButton>
+                    </div>
+                )}
+
+                {viewState === 'events_view' && (
+                    <div className="space-y-4">
+                        <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100 text-center">Mis Eventos</h3>
+
+                        {/* Navegación de semana */}
+                        <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-700 p-1.5 rounded-xl">
+                            <button
+                                onClick={() => eventsWeekDate && loadEvents(eventsWeekDate.subtract(1, 'week'))}
+                                className="w-10 h-9 flex items-center justify-center bg-white dark:bg-gray-800 rounded-lg font-black text-violet-600 shadow-sm hover:bg-violet-50 active:scale-95 transition-all"
+                            >
+                                ←
+                            </button>
+                            <div className="flex-1 text-center">
+                                {eventsWeekDate ? (
+                                    <span className="text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-tight">
+                                        {eventsWeekDate.format('D MMM')} – {eventsWeekDate.add(6, 'day').format('D MMM')}
+                                    </span>
+                                ) : (
+                                    <span className="text-xs text-gray-400">Cargando...</span>
+                                )}
+                            </div>
+                            <button
+                                onClick={() => eventsWeekDate && loadEvents(eventsWeekDate.add(1, 'week'))}
+                                className="w-10 h-9 flex items-center justify-center bg-white dark:bg-gray-800 rounded-lg font-black text-violet-600 shadow-sm hover:bg-violet-50 active:scale-95 transition-all"
+                            >
+                                →
+                            </button>
+                        </div>
+
+                        {/* Lista de eventos */}
+                        <div className="space-y-3 max-h-[50vh] overflow-y-auto">
+                            {eventsLoading ? (
+                                <div className="flex justify-center py-8">
+                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-500"></div>
+                                </div>
+                            ) : weekEvents.length === 0 ? (
+                                <p className="text-center text-gray-400 py-8 text-sm">Sin eventos esta semana.</p>
+                            ) : (
+                                weekEvents.map((ev, i) => (
+                                    <div
+                                        key={i}
+                                        className={`p-4 rounded-xl border-l-4 ${
+                                            ev.is_today
+                                                ? 'bg-violet-50 dark:bg-violet-900/30 border-violet-500'
+                                                : ev.scope === 'all'
+                                                    ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-400'
+                                                    : 'bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600'
+                                        }`}
+                                    >
+                                        <div className="flex items-start justify-between gap-2 mb-1">
+                                            <p className="font-black text-sm text-slate-800 dark:text-slate-100 leading-tight">
+                                                {ev.title}
+                                            </p>
+                                            {ev.scope === 'all' && (
+                                                <span className="shrink-0 text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-300">
+                                                    Todos
+                                                </span>
+                                            )}
+                                        </div>
+                                        <p className="text-xs text-slate-500 dark:text-slate-400 capitalize">
+                                            {ev.start_datetime}
+                                        </p>
+                                        <p className="text-xs text-slate-400 dark:text-slate-500">
+                                            hasta: {ev.end_datetime}
+                                        </p>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+
                         <SecondaryButton onClick={() => setViewState('options')} className="w-full justify-center">Volver</SecondaryButton>
                     </div>
                 )}
