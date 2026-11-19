@@ -90,6 +90,15 @@ export default function EventsIndex({ events, messengers }) {
 
     const today = dayjs();
 
+    // Eventos que tocan el mes visible, para la lista en móvil
+    const monthEvents = useMemo(() => {
+        const start = currentMonth.startOf('month');
+        const end = currentMonth.endOf('month');
+        return events
+            .filter(ev => !dayjs(ev.end_datetime).isBefore(start) && !dayjs(ev.start_datetime).isAfter(end))
+            .sort((a, b) => dayjs(a.start_datetime).diff(dayjs(b.start_datetime)));
+    }, [events, currentMonth]);
+
     // ── Handlers de modal ──────────────────────────────────────────────────────
     const openCreate = (day = null) => {
         if (!canEdit) return;
@@ -163,7 +172,7 @@ export default function EventsIndex({ events, messengers }) {
                     )}
 
                     {/* ── Cabecera del calendario ── */}
-                    <div className="flex items-center justify-between mb-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                         <div className="flex items-center gap-2">
                             <button
                                 onClick={() => setCurrentMonth(m => m.subtract(1, 'month'))}
@@ -174,7 +183,7 @@ export default function EventsIndex({ events, messengers }) {
                                 </svg>
                             </button>
 
-                            <h3 className="text-lg font-black text-slate-800 dark:text-slate-100 capitalize min-w-[160px] text-center">
+                            <h3 className="text-lg font-black text-slate-800 dark:text-slate-100 capitalize min-w-[130px] sm:min-w-[160px] text-center">
                                 {currentMonth.format('MMMM YYYY')}
                             </h3>
 
@@ -312,7 +321,7 @@ export default function EventsIndex({ events, messengers }) {
                     </div>
 
                     {/* Leyenda */}
-                    <div className="flex items-center gap-4 mt-3 px-1">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-3 px-1">
                         <div className="flex items-center gap-1.5">
                             <div className="w-3 h-3 rounded-full bg-indigo-500" />
                             <span className="text-[11px] text-slate-400 font-medium">Para todos</span>
@@ -321,7 +330,31 @@ export default function EventsIndex({ events, messengers }) {
                             <div className="w-3 h-3 rounded-full bg-violet-500" />
                             <span className="text-[11px] text-slate-400 font-medium">Específico</span>
                         </div>
-                        <span className="text-[11px] text-slate-300">· Click en un día para agregar</span>
+                        {canEdit && <span className="text-[11px] text-slate-300">· Toca un día para agregar</span>}
+                    </div>
+
+                    {/* ── Lista del mes (móvil): en el calendario las barras quedan muy angostas ── */}
+                    <div className="sm:hidden mt-5 space-y-2">
+                        <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-widest px-1">Eventos del mes</h4>
+                        {monthEvents.length === 0 ? (
+                            <p className="text-center text-slate-400 text-sm py-6">Sin eventos este mes.</p>
+                        ) : monthEvents.map(ev => (
+                            <button
+                                key={ev.id}
+                                type="button"
+                                onClick={() => openEdit(ev)}
+                                disabled={!canEdit}
+                                className={`w-full text-left p-3 rounded-xl border-l-4 bg-white dark:bg-slate-800 shadow-sm ${ev.scope === 'all' ? 'border-indigo-500' : 'border-violet-500'}`}
+                            >
+                                <p className="font-bold text-sm text-slate-800 dark:text-slate-100">{ev.title}</p>
+                                <p className="text-[11px] text-slate-500 dark:text-slate-400 capitalize">
+                                    {dayjs(ev.start_datetime).format('ddd D MMM, HH:mm')} → {dayjs(ev.end_datetime).format('ddd D MMM, HH:mm')}
+                                </p>
+                                <p className="text-[11px] text-slate-400 truncate">
+                                    {ev.scope === 'all' ? 'Todos los mensajeros' : ev.messenger_names.join(', ')}
+                                </p>
+                            </button>
+                        ))}
                     </div>
                 </div>
             </div>

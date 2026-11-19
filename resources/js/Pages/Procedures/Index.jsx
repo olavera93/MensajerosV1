@@ -238,8 +238,8 @@ export default function ProcedureIndex({ procedures, messengers, filters, stats 
                             Gestión de Trámites
                             <span className="bg-slate-100 text-slate-500 text-[10px] px-2 py-0.5 rounded-full font-bold">{stats.total} Total</span>
                         </h1>
-                        <div className="flex gap-2">
-                            <div className="flex bg-white dark:bg-slate-800 p-1 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm">
+                        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+                            <div className="flex w-full sm:w-auto justify-around bg-white dark:bg-slate-800 p-1 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm">
                                 <div className="px-3 py-1 border-r border-slate-100 dark:border-slate-700">
                                     <div className="text-[9px] uppercase font-bold text-slate-400 leading-none mb-1">Pendiente</div>
                                     <div className="text-xs font-black text-amber-600 leading-none">{stats.pendiente}</div>
@@ -254,12 +254,12 @@ export default function ProcedureIndex({ procedures, messengers, filters, stats 
                                 </div>
                             </div>
                             {can('tramites.editar') && (
-                                <button onClick={() => setShowImportModal(true)} className="px-5 py-2.5 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-bold text-[11px] uppercase tracking-widest hover:bg-slate-50 dark:hover:bg-slate-700 transition-all active:scale-95 border border-slate-200 dark:border-slate-700 shadow-sm">
+                                <button onClick={() => setShowImportModal(true)} className="flex-1 sm:flex-none px-5 py-2.5 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-bold text-[11px] uppercase tracking-widest hover:bg-slate-50 dark:hover:bg-slate-700 transition-all active:scale-95 border border-slate-200 dark:border-slate-700 shadow-sm">
                                     📥 Importar
                                 </button>
                             )}
                             {can('tramites.editar') && (
-                                <button onClick={() => openModal()} className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-bold text-[11px] uppercase tracking-widest hover:bg-indigo-700 transition-all active:scale-95 shadow-lg shadow-indigo-100 dark:shadow-none">
+                                <button onClick={() => openModal()} className="flex-1 sm:flex-none px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-bold text-[11px] uppercase tracking-widest hover:bg-indigo-700 transition-all active:scale-95 shadow-lg shadow-indigo-100 dark:shadow-none">
                                     ➕ Nuevo Registro
                                 </button>
                             )}
@@ -404,8 +404,68 @@ export default function ProcedureIndex({ procedures, messengers, filters, stats 
                     </div>
                 )}
 
+                {/* Tarjetas (móvil) */}
+                <div className="sm:hidden space-y-3">
+                    {procedures.data.length > 0 && (
+                        <label className="flex items-center gap-2 px-1 text-xs font-bold text-slate-500">
+                            <input
+                                type="checkbox"
+                                className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                onChange={handleSelectAll}
+                                checked={selectedIds.length === procedures.data.length && procedures.data.length > 0}
+                            />
+                            Seleccionar todos
+                        </label>
+                    )}
+                    {procedures.data.map((p) => (
+                        <div key={p.id} className={`bg-white dark:bg-slate-800 rounded-2xl border shadow-sm p-4 ${selectedIds.includes(p.id) ? 'border-indigo-300 bg-indigo-50/30' : 'border-slate-100 dark:border-slate-700'}`}>
+                            <div className="flex items-start gap-3">
+                                <input
+                                    type="checkbox"
+                                    className="mt-1 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                    checked={selectedIds.includes(p.id)}
+                                    onChange={() => handleSelectOne(p.id)}
+                                />
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center flex-wrap gap-2">
+                                        <span className="font-bold text-slate-800 dark:text-slate-100 text-sm">{p.guide || 'S/G'}</span>
+                                        <span className={`px-1.5 py-0.5 rounded-[4px] text-[10px] font-black uppercase ${p.priority === 'Urgente' ? 'bg-rose-100 text-rose-600' : 'bg-slate-100 text-slate-500'}`}>{p.priority}</span>
+                                        <span className={`px-1.5 py-0.5 rounded text-[10px] uppercase font-black ${p.status === 'completado' ? 'bg-emerald-50 text-emerald-600' : p.status === 'en_ruta' ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'}`}>{p.status}</span>
+                                    </div>
+                                    <p className="text-xs text-slate-500 mt-0.5 truncate">{p.product} <span className="opacity-50 font-mono">(x{p.quantity})</span></p>
+                                    <p className="text-sm font-bold text-slate-700 dark:text-slate-300 mt-2">{p.contact_name}</p>
+                                    {p.phone && <a href={`tel:${p.phone}`} className="text-xs text-indigo-500 font-bold">{p.phone}</a>}
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{p.address}</p>
+                                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500 font-bold">
+                                        <span>🕒 {p.start_date ? new Date(p.start_date).toLocaleDateString([], { month: 'short', day: 'numeric' }) : ''} {p.start_date ? new Date(p.start_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--'} - {p.end_date ? new Date(p.end_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--'}</span>
+                                        <span>🛵 {p.messenger_id ? messengers.find(m => m.id === p.messenger_id)?.name || 'Asignado' : 'Sin asignar'}</span>
+                                    </div>
+                                    {p.management_notes && (
+                                        <div className="mt-2 p-1.5 bg-amber-50/50 border-l-2 border-amber-200 rounded text-xs text-amber-700 leading-tight">{p.management_notes}</div>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="mt-3 grid grid-cols-3 gap-2">
+                                <button onClick={() => openModal(p, true)} className="py-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-200 text-[11px] font-bold uppercase">Ver</button>
+                                {can('tramites.editar') && (
+                                    <button onClick={() => openModal(p)} className="py-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300 text-[11px] font-bold uppercase">Editar</button>
+                                )}
+                                {can('tramites.eliminar') && (
+                                    <button onClick={() => handleDelete(p.id)} className="py-2 rounded-lg bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 text-[11px] font-bold uppercase">Eliminar</button>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                    {procedures.data.length === 0 && (
+                        <div className="text-center py-12">
+                            <span className="text-3xl opacity-20">📂</span>
+                            <p className="text-slate-400 italic text-xs">No se encontraron trámites con estos filtros.</p>
+                        </div>
+                    )}
+                </div>
+
                 {/* Table */}
-                <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden">
+                <div className="hidden sm:block bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">
                             <thead>
@@ -489,7 +549,7 @@ export default function ProcedureIndex({ procedures, messengers, filters, stats 
                                             )}
                                         </td>
                                         <td className="px-5 py-4 text-right">
-                                            <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <div className="flex justify-end gap-1 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
                                                 <button onClick={() => openModal(p, true)} className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg transition-colors" title="Ver Detalles">
                                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                                                 </button>

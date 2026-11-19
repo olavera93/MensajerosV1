@@ -85,8 +85,32 @@ export default function PreoperationalQuestions({ auth, questions }) {
                         </button>
                     </div>
 
+                    {/* Tarjetas (móvil) */}
+                    <div className="sm:hidden space-y-3">
+                        {questions.length === 0 ? (
+                            <p className="text-center text-gray-500 dark:text-gray-400 py-8 text-sm">No hay preguntas configuradas.</p>
+                        ) : questions.map(q => (
+                            <div key={q.id} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-4">
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0">
+                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">#{q.order} · {q.category}</p>
+                                        <p className="text-sm font-bold text-gray-800 dark:text-gray-100 mt-0.5">{q.label}</p>
+                                        <p className="text-[11px] text-gray-400 font-mono truncate">{q.key}</p>
+                                    </div>
+                                    <span className={`shrink-0 px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${q.active ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-400' : 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-400'}`}>
+                                        {q.active ? 'Activo' : 'Inactivo'}
+                                    </span>
+                                </div>
+                                <div className="mt-3 grid grid-cols-2 gap-2">
+                                    <button onClick={() => openEditModal(q)} className="py-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300 text-xs font-bold">Editar</button>
+                                    <button onClick={() => handleDelete(q.id)} className="py-2 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-xs font-bold">Eliminar</button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
                     {/* Tabla */}
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden border border-gray-100 dark:border-gray-700">
+                    <div className="hidden sm:block bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden border border-gray-100 dark:border-gray-700">
                         <div className="overflow-x-auto">
                             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                                 <thead className="bg-gray-50 dark:bg-gray-900/50 flex flex-col w-full">

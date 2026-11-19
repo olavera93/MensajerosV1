@@ -66,16 +66,16 @@ export default function GlobalStats({ filters, messengers }) {
                             />
                         </div>
 
-                        <div className="flex items-center gap-3">
-                            <div className="flex items-center gap-2 bg-white dark:bg-slate-800 p-1 pl-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                        <div className="grid grid-cols-2 sm:flex items-center gap-3 w-full sm:w-auto">
+                            <div className="flex items-center gap-2 min-w-0 bg-white dark:bg-slate-800 p-1 pl-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
                                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Desde:</span>
                                 <TextInput type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)}
-                                    className="border-none bg-transparent dark:text-white text-xs focus:ring-0 py-1 shadow-none" />
+                                    className="w-full min-w-0 border-none bg-transparent dark:text-white text-xs focus:ring-0 py-1 px-1 shadow-none" />
                             </div>
-                            <div className="flex items-center gap-2 bg-white dark:bg-slate-800 p-1 pl-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                            <div className="flex items-center gap-2 min-w-0 bg-white dark:bg-slate-800 p-1 pl-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
                                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Hasta:</span>
                                 <TextInput type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)}
-                                    className="border-none bg-transparent dark:text-white text-xs focus:ring-0 py-1 shadow-none" />
+                                    className="w-full min-w-0 border-none bg-transparent dark:text-white text-xs focus:ring-0 py-1 px-1 shadow-none" />
                             </div>
 
                             {can('estadisticas.exportar') && (
@@ -88,7 +88,7 @@ export default function GlobalStats({ filters, messengers }) {
                                         });
                                         window.location.href = `${route('reports.global-stats.export')}?${params}`;
                                     }}
-                                    className="flex items-center gap-2.5 bg-[#009164] hover:bg-[#007b55] text-white text-[11px] font-black uppercase tracking-widest px-7 py-3 rounded-full transition-all shadow-[0_4px_14px_0_rgba(0,145,100,0.39)] group"
+                                    className="col-span-2 justify-center flex items-center gap-2.5 bg-[#009164] hover:bg-[#007b55] text-white text-[11px] font-black uppercase tracking-widest px-7 py-3 rounded-full transition-all shadow-[0_4px_14px_0_rgba(0,145,100,0.39)] group"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-white stroke-[2.5]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
                                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />

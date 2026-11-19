@@ -1,8 +1,7 @@
 import React from 'react';
 import { Link, usePage, router } from '@inertiajs/react';
-import DataPurgeModal from '@/Components/DataPurgeModal';
 
-export default function LeaderLayout({ children, title, onPurgeClick }) {
+export default function LeaderLayout({ children, title }) {
     const { auth } = usePage().props;
 
     // Menú: los módulos que el usuario puede ver (catálogo compartido por el servidor)
@@ -16,8 +15,12 @@ export default function LeaderLayout({ children, title, onPurgeClick }) {
             active: route().current(g.route.replace(/\.index$/, '') + '*'),
         }));
 
-    // Barra inferior en móvil: los primeros cuatro módulos disponibles
-    const bottomNavItems = menuItems.slice(0, 4);
+    // Barra inferior en móvil: hasta cuatro módulos; si hay más, el cuarto espacio es "Más",
+    // que abre el menú completo (todos los módulos, usuario y salir)
+    const hasMore = menuItems.length > 4;
+    const bottomNavItems = hasMore ? menuItems.slice(0, 3) : menuItems;
+    const activeInMore = hasMore && menuItems.slice(3).some(n => n.active);
+    const [showMenu, setShowMenu] = React.useState(false);
 
     const logout = (e) => {
         e.preventDefault();
@@ -27,8 +30,6 @@ export default function LeaderLayout({ children, title, onPurgeClick }) {
         }
         router.post(route('logout'));
     };
-
-    const [showPurgeModal, setShowPurgeModal] = React.useState(false);
 
     const [theme, setTheme] = React.useState(() => {
         if (typeof window !== 'undefined') {
@@ -58,7 +59,7 @@ export default function LeaderLayout({ children, title, onPurgeClick }) {
                     </Link>
 
                     {/* Desktop Links */}
-                    <div className="hidden lg:flex items-center gap-1">
+                    <div className="hidden lg:flex items-center gap-1 min-w-0 overflow-x-auto mx-4">
                         {menuItems.map((nav) => (
                             <Link
                                 key={nav.route}
@@ -82,18 +83,6 @@ export default function LeaderLayout({ children, title, onPurgeClick }) {
                             <span className="text-[10px] text-slate-400 uppercase font-black tracking-widest">Usuario</span>
                             <span className="text-xs font-bold text-white">{auth.user.name}</span>
                         </div>
-
-                        {/* Purge button - desktop only */}
-                        {auth.user.is_developer && (
-                            <button
-                                onClick={() => setShowPurgeModal(true)}
-                                className="hidden md:flex items-center gap-1.5 bg-slate-800 hover:bg-red-900/60 border border-red-800/40 text-red-400 hover:text-red-300 px-3 py-2 rounded-lg text-xs font-bold transition-colors duration-200"
-                                title="Depurar base de datos"
-                            >
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                Depurar BD
-                            </button>
-                        )}
 
                         {/* Logout - desktop only */}
                         <button
@@ -137,7 +126,7 @@ export default function LeaderLayout({ children, title, onPurgeClick }) {
                             key={nav.route}
                             href={route(nav.route)}
                             className={`
-                                flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] font-bold tracking-wide transition-all duration-200 active:scale-95
+                                relative flex-1 min-w-0 flex flex-col items-center justify-center gap-0.5 text-[10px] font-bold tracking-wide transition-all duration-200 active:scale-95
                                 ${nav.active
                                     ? 'text-indigo-400'
                                     : 'text-slate-500 hover:text-slate-300'}
@@ -146,24 +135,69 @@ export default function LeaderLayout({ children, title, onPurgeClick }) {
                             <span className={`text-lg leading-none transition-transform duration-200 ${nav.active ? 'scale-110' : ''}`}>
                                 {nav.icon}
                             </span>
-                            <span>{nav.label}</span>
+                            <span className="max-w-full truncate px-1">{nav.label}</span>
                             {nav.active && (
                                 <span className="absolute top-1 w-1 h-1 bg-indigo-400 rounded-full shadow-[0_0_8px_rgba(129,140,248,0.8)]" />
                             )}
                         </Link>
                     ))}
-                    {/* Botón Salir para móvil */}
+                    {/* Menú completo en móvil */}
                     <button
-                        onClick={logout}
-                        className="flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] font-bold tracking-wide transition-all duration-200 active:scale-95 text-slate-500 hover:text-red-400"
+                        type="button"
+                        onClick={() => setShowMenu(true)}
+                        aria-label="Abrir menú"
+                        className={`relative flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] font-bold tracking-wide transition-all duration-200 active:scale-95 ${activeInMore ? 'text-indigo-400' : 'text-slate-500 hover:text-slate-300'}`}
                     >
-                        <span className="text-lg leading-none">🚪</span>
-                        <span>Salir</span>
+                        <span className="text-lg leading-none">☰</span>
+                        <span>Más</span>
+                        {activeInMore && <span className="absolute top-1 w-1 h-1 bg-indigo-400 rounded-full" />}
                     </button>
                 </div>
             </nav>
 
-            <DataPurgeModal show={showPurgeModal} onClose={() => setShowPurgeModal(false)} />
+            {/* ── Menú completo (móvil) ── */}
+            {showMenu && (
+                <div className="lg:hidden fixed inset-0 z-[2100]" role="dialog" aria-modal="true">
+                    <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" onClick={() => setShowMenu(false)} />
+                    <div className="absolute bottom-0 inset-x-0 max-h-[85vh] overflow-y-auto bg-white dark:bg-slate-900 rounded-t-3xl shadow-2xl pb-[env(safe-area-inset-bottom)]">
+                        <div className="sticky top-0 bg-white dark:bg-slate-900 px-5 pt-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+                            <div className="mx-auto w-10 h-1 rounded-full bg-slate-300 dark:bg-slate-700 mb-3" />
+                            <div className="flex items-center justify-between gap-3">
+                                <div className="min-w-0">
+                                    <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest">Usuario</p>
+                                    <p className="font-bold text-slate-800 dark:text-white truncate">{auth.user.name}</p>
+                                </div>
+                                <button type="button" onClick={() => setShowMenu(false)} className="shrink-0 w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 font-bold" aria-label="Cerrar menú">✕</button>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 p-4">
+                            {menuItems.map((nav) => (
+                                <Link
+                                    key={nav.route}
+                                    href={route(nav.route)}
+                                    onClick={() => setShowMenu(false)}
+                                    className={`flex flex-col items-center justify-center gap-1 rounded-2xl px-2 py-3 text-center text-[11px] font-bold leading-tight transition-colors ${nav.active
+                                        ? 'bg-indigo-600 text-white'
+                                        : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 active:bg-slate-100'}`}
+                                >
+                                    <span className="text-2xl leading-none">{nav.icon}</span>
+                                    <span>{nav.label}</span>
+                                </Link>
+                            ))}
+                        </div>
+                        <div className="px-4 pb-4 space-y-2">
+                            <button
+                                type="button"
+                                onClick={logout}
+                                className="w-full flex items-center justify-center gap-2 rounded-xl bg-slate-900 dark:bg-slate-800 text-white py-3 text-xs font-bold"
+                            >
+                                🚪 Salir
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
         </div>
     );
 }

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import LeaderLayout from '@/Layouts/LeaderLayout';
+import MobileSort from '@/Components/MobileSort';
 import { Head, usePage, Link } from '@inertiajs/react';
 import SuccessButton from '@/Components/SuccessButton';
 import SecondaryButton from '@/Components/SecondaryButton';
@@ -135,7 +136,40 @@ export default function CleaningReport({ filters }) {
                     </div>
                 ) : (
                     <>
-                        <div className="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
+                        {/* Tarjetas (móvil) */}
+                        <MobileSort
+                            sortConfig={sortConfig}
+                            onChange={setSortConfig}
+                            options={[{ key: 'date', label: 'Fecha' }, { key: 'messenger', label: 'Mensajero' }, { key: 'vehicle', label: 'Vehículo' }, { key: 'item', label: 'Elemento' }, { key: 'type', label: 'Tipo de aseo' }]}
+                        />
+                        <div className="flex sm:hidden flex-col gap-3 mb-2">
+                            {paginatedRows.length === 0 ? (
+                                <div className="text-center p-12 text-slate-400">
+                                    <p className="text-3xl mb-2">✨</p>
+                                    <p className="text-sm font-medium">No hay registros para las fechas seleccionadas.</p>
+                                </div>
+                            ) : paginatedRows.map((log) => (
+                                <div key={log.id} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm px-4 py-3">
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div className="min-w-0">
+                                            <p className="font-bold text-sm text-slate-800 dark:text-slate-100 truncate">{log.messenger}</p>
+                                            <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">{log.vehicle} · {log.date} {log.time}</p>
+                                        </div>
+                                    </div>
+                                    <div className="mt-2 flex flex-wrap gap-2">
+                                        <span className={`px-2 py-1 rounded-full font-bold text-[10px] uppercase ${log.item.includes('Maleta') ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
+                                            {log.item.includes('Maleta') ? '🎒 ' : '🛵 '} {log.item}
+                                        </span>
+                                        <span className={`px-2 py-1 rounded-full font-bold text-[10px] uppercase ${log.type.includes('Semanal') ? 'bg-slate-100 text-slate-700' : 'bg-green-100 text-green-700'}`}>
+                                            {log.type}
+                                        </span>
+                                    </div>
+                                    {log.observations && <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 italic">{log.observations}</p>}
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="hidden sm:block bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
                             <div className="overflow-x-auto">
                                 <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                                     <thead className="bg-gray-50 dark:bg-gray-700">

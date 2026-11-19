@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import LeaderLayout from '@/Layouts/LeaderLayout';
+import MobileSort from '@/Components/MobileSort';
 import { Head } from '@inertiajs/react';
 import SuccessButton from '@/Components/SuccessButton';
 import SecondaryButton from '@/Components/SecondaryButton';
@@ -140,6 +141,11 @@ export default function LunchReport({ filters }) {
                 ) : (
                     <>
                         {/* ── Mobile Card List (< sm) ── */}
+                        <MobileSort
+                            sortConfig={sortConfig}
+                            onChange={setSortConfig}
+                            options={[{ key: 'start_time', label: 'Inicio' }, { key: 'end_time', label: 'Fin' }, { key: 'date', label: 'Fecha' }, { key: 'messenger', label: 'Mensajero' }, { key: 'status', label: 'Estado' }]}
+                        />
                         <div className="flex sm:hidden flex-col gap-3 mb-2">
                             {paginatedRows.length === 0 ? (
                                 <div className="text-center p-12 text-slate-400">

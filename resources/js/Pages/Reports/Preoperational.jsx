@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import LeaderLayout from '@/Layouts/LeaderLayout';
+import MobileSort from '@/Components/MobileSort';
 import { Head, usePage, Link } from '@inertiajs/react';
 import SuccessButton from '@/Components/SuccessButton';
 import SecondaryButton from '@/Components/SecondaryButton';
@@ -163,6 +164,49 @@ export default function PreoperationalReport({ filters }) {
                     </div>
                 ) : (
                     <>
+                        {/* Mobile Cards */}
+                        <MobileSort
+                            sortConfig={sortConfig}
+                            onChange={setSortConfig}
+                            options={[{ key: 'date', label: 'Fecha' }, { key: 'messenger', label: 'Mensajero' }, { key: 'vehicle', label: 'Vehículo' }]}
+                        />
+                        <div className="flex sm:hidden flex-col gap-3 mb-2">
+                            {paginatedRows.length === 0 ? (
+                                <div className="text-center p-12 text-slate-400">
+                                    <p className="text-3xl mb-2">📋</p>
+                                    <p className="text-sm font-medium">No hay registros para las fechas seleccionadas.</p>
+                                </div>
+                            ) : paginatedRows.map((log) => (
+                                <div key={log.id} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm px-4 py-3">
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div className="min-w-0">
+                                            <p className="font-bold text-sm text-slate-800 dark:text-slate-100 truncate">{log.messenger}</p>
+                                            <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">{log.vehicle} · {log.date} {log.time}</p>
+                                        </div>
+                                        <span className={`shrink-0 px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${log.on_time === 'A Tiempo' ? 'bg-green-100 text-green-800' : log.on_time === 'Sin Turno' ? 'bg-gray-100 text-gray-800' : 'bg-red-100 text-red-800'}`}>
+                                            {log.on_time}
+                                        </span>
+                                    </div>
+                                    {log.observations && (
+                                        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 line-clamp-2">{log.observations}</p>
+                                    )}
+                                    <div className="mt-3 flex items-center justify-between gap-2">
+                                        <span className="text-xs font-bold">
+                                            <span className="text-green-600 dark:text-green-400">{log.yes_count} sí</span>
+                                            <span className="mx-1 text-slate-400">|</span>
+                                            <span className="text-red-500 dark:text-red-400">{log.no_count} no</span>
+                                        </span>
+                                        <button
+                                            onClick={() => setSelectedAnswersModal(log)}
+                                            className="text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/40 px-3 py-2 rounded-lg font-bold text-xs"
+                                        >
+                                            Ver Checklist
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
                         {/* Desktop Table (sm+) */}
                         <div className="hidden sm:block bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
                             <div className="overflow-x-auto">

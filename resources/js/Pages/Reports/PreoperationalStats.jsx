@@ -81,8 +81,8 @@ export default function PreoperationalStats({ auth, filters, messengers }) {
                             <h3 className="text-xl font-bold text-gray-800 dark:text-white">Análisis de Novedades</h3>
                         </div>
 
-                        <form onSubmit={handleFilter} className="flex gap-2 w-full md:w-auto items-center">
-                            <div ref={wrapperRef} className="relative flex items-center w-64 z-50">
+                        <form onSubmit={handleFilter} className="grid grid-cols-2 sm:flex gap-2 w-full md:w-auto items-center">
+                            <div ref={wrapperRef} className="relative col-span-2 flex items-center w-full sm:w-64 z-50">
                                 <input
                                     type="text"
                                     placeholder="Buscar mensajero..."
@@ -144,17 +144,17 @@ export default function PreoperationalStats({ auth, filters, messengers }) {
                                 type="date"
                                 value={startDate}
                                 onChange={e => setStartDate(e.target.value)}
-                                className="border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-indigo-500 dark:focus:border-indigo-600 focus:ring-indigo-500 dark:focus:ring-indigo-600 rounded-md shadow-sm text-sm"
+                                className="w-full min-w-0 sm:w-auto border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-indigo-500 dark:focus:border-indigo-600 focus:ring-indigo-500 dark:focus:ring-indigo-600 rounded-md shadow-sm text-sm"
                             />
                             <input
                                 type="date"
                                 value={endDate}
                                 onChange={e => setEndDate(e.target.value)}
-                                className="border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-indigo-500 dark:focus:border-indigo-600 focus:ring-indigo-500 dark:focus:ring-indigo-600 rounded-md shadow-sm text-sm"
+                                className="w-full min-w-0 sm:w-auto border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-indigo-500 dark:focus:border-indigo-600 focus:ring-indigo-500 dark:focus:ring-indigo-600 rounded-md shadow-sm text-sm"
                             />
                             <button
                                 type="submit"
-                                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md transition-colors text-sm font-medium"
+                                className="col-span-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md transition-colors text-sm font-medium"
                             >
                                 Filtrar
                             </button>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import LeaderLayout from '@/Layouts/LeaderLayout';
+import MobileSort from '@/Components/MobileSort';
 import { Head } from '@inertiajs/react';
 import axios from 'axios';
 import PrimaryButton from '@/Components/PrimaryButton';
@@ -202,6 +203,11 @@ export default function Exit({ messengers, filters }) {
                     return (
                         <>
                             {/* ── Mobile Card List (< sm) ── */}
+                            <MobileSort
+                                sortConfig={sortConfig}
+                                onChange={setSortConfig}
+                                options={[{ key: 'date', label: 'Fecha' }, { key: 'messenger', label: 'Mensajero' }, { key: 'scheduled_end', label: 'Salida programada' }, { key: 'actual_end', label: 'Salida real' }, { key: 'diff_minutes', label: 'Diferencia' }]}
+                            />
                             <div className="flex sm:hidden flex-col gap-3 mb-2">
                                 {paginatedRows.length === 0 ? (
                                     <div className="text-center p-12 text-slate-400">

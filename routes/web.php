@@ -13,7 +13,6 @@ use App\Http\Controllers\MessengerController;
 use App\Http\Controllers\ExternalFormController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ProcedureController;
-use App\Http\Controllers\PurgeController;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\CleaningController;
 use App\Http\Controllers\GlobalStatsController;
@@ -101,7 +100,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/reports/exit/sync-dispatchtrack', [ShiftCompletionController::class, 'syncFromDispatchTrack'])->middleware('permission:salida.sincronizar')->name('reports.exit.sync');
 
     // 7. Gestión de Mensajeros
-    Route::resource('messengers', MessengerController::class)->only(['index', 'show'])->middleware('permission:mensajeros.ver');
+    Route::resource('messengers', MessengerController::class)->only(['index'])->middleware('permission:mensajeros.ver');
     Route::resource('messengers', MessengerController::class)->only(['create', 'store', 'edit', 'update'])->middleware('permission:mensajeros.editar');
     Route::resource('messengers', MessengerController::class)->only(['destroy'])->middleware('permission:mensajeros.eliminar');
 
@@ -124,14 +123,6 @@ Route::middleware(['auth'])->group(function () {
     Route::put('/users/{user}', [UserController::class, 'update'])->name('users.update');
     Route::post('/users', [UserController::class, 'store'])->middleware('permission:usuarios.editar')->name('users.store');
     Route::delete('/users/{user}', [UserController::class, 'destroy'])->middleware('permission:usuarios.eliminar')->name('users.destroy');
-
-    // Purga de datos: solo desarrollador
-    Route::middleware(['role:desarrollador'])->group(function () {
-        Route::get('/admin/purge/preview', [PurgeController::class, 'preview'])->name('admin.purge.preview');
-        Route::post('/admin/purge/backup', [PurgeController::class, 'backup'])->name('admin.purge.backup');
-        Route::post('/admin/purge/verify', [PurgeController::class, 'verifyPassword'])->name('admin.purge.verify');
-        Route::post('/admin/purge/execute', [PurgeController::class, 'execute'])->name('admin.purge.execute');
-    });
 
     // 11. Trámites
     Route::get('/procedures', [ProcedureController::class, 'index'])->middleware('permission:tramites.ver')->name('procedures.index');
